@@ -1,0 +1,76 @@
+/* Cronboard — Radix Themes styles are loaded via JS import in main.tsx.
+   This file holds only project-level overrides. */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--default-font-family);
+  background: var(--color-background);
+  color: var(--gray-12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbars (subtle) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--gray-a5);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-a7);
+}
+
+/* Code blocks (used in run-details drawer for response bodies) */
+pre.cb-code {
+  background: var(--gray-2);
+  border: 1px solid var(--gray-a4);
+  border-radius: var(--radius-3);
+  padding: var(--space-3);
+  font-family: var(--default-font-family);
+  font-size: 12px;
+  overflow: auto;
+  max-height: 360px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Cron-input grid helpers */
+.cb-cron-grid {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+}
+.cb-cron-grid label {
+  color: var(--gray-11);
+  font-size: 12px;
+}
+.cb-cron-grid input {
+  width: 100%;
+  background: var(--gray-2);
+  border: 1px solid var(--gray-a5);
+  border-radius: var(--radius-2);
+  color: var(--gray-12);
+  padding: 6px 8px;
+  font-family: var(--default-font-family);
+  font-size: 13px;
+}
+.cb-cron-grid input:focus {
+  outline: none;
+  border-color: var(--accent-8);
+  box-shadow: 0 0 0 1px var(--accent-8);
+}

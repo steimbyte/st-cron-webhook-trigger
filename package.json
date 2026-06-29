@@ -1,0 +1,46 @@
+{
+  "name": "cronboard",
+  "version": "0.1.0",
+  "description": "Local-first cron scheduler with a Radix UI web frontend. Run, edit and monitor cron jobs visually — trigger webhooks, run shell commands, log runs.",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/web"
+  ],
+  "scripts": {
+    "build": "npm run build:web && node bin/copy-web.mjs",
+    "build:web": "npm run build -w packages/web && node bin/copy-web.mjs",
+    "build:core": "npm run typecheck -w packages/core",
+    "dev": "concurrently -k -n web,core -c cyan,magenta \"npm:dev:web\" \"npm:dev:core\"",
+    "dev:web": "npm run dev -w packages/web",
+    "dev:core": "npm run dev -w packages/core",
+    "start": "tsx packages/core/src/cli.ts start",
+    "stop": "tsx packages/core/src/cli.ts stop",
+    "status": "tsx packages/core/src/cli.ts status",
+    "logs": "tsx packages/core/src/cli.ts logs",
+    "ls": "tsx packages/core/src/cli.ts ls",
+    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
+    "test": "node --test --import tsx packages/core/src/**/*.test.ts",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,css,md}\""
+  },
+  "keywords": [
+    "cron",
+    "scheduler",
+    "webhook",
+    "radix-ui",
+    "local-first",
+    "node",
+    "typescript"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prettier": "^3.2.5",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}
