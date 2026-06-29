@@ -12,6 +12,7 @@ import { createJobSchema, updateJobSchema } from "./schemas.js";
 import { randomUUID } from "node:crypto";
 import cronstrue from "cronstrue";
 const cronstrueDescribe = (cronstrue as unknown as { toString: (e: string, o?: { locale?: string; tz?: string }) => string }).toString;
+import { Cron } from "croner";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -143,6 +144,33 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
     try {
       const text = cronstrueDescribe(q.expr, { locale: "en", tz: q.tz });
       return { ok: true, text };
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Next N upcoming runs — used by the visual CronBuilder preview.
+  app.get("/api/cron/next", async (req) => {
+    const q = z
+      .object({
+        expr: z.string(),
+        tz: z.string().optional(),
+        count: z.coerce.number().int().min(1).max(20).optional().default(5),
+      })
+      .parse(req.query ?? {});
+    try {
+      const t = new Cron(q.expr, { timezone: q.tz });
+      const runs: string[] = [];
+      // Croner doesn't auto-advance: every nextRun() (without explicit fromDate)
+      // returns the first slot after "now". We have to step "from" forward each iteration.
+      let cursor = new Date();
+      for (let i = 0; i < q.count; i++) {
+        const n = t.nextRun(cursor);
+        if (!n) break;
+        runs.push(n.toISOString());
+        cursor = new Date(n.getTime() + 1000);
+      }
+      return { ok: true, runs };
     } catch (err: any) {
       return { ok: false, error: err.message };
     }

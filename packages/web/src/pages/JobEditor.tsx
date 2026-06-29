@@ -17,6 +17,7 @@ import {
   Grid,
 } from "@radix-ui/themes";
 import { PlusIcon, TrashIcon, PlayIcon, GlobeIcon, CodeIcon } from "@radix-ui/react-icons";
+import CronBuilder from "../components/CronBuilder";
 import { api } from "../lib/api";
 import type { Job, JobAction, WebhookConfig, ShellConfig } from "../types";
 
@@ -44,7 +45,6 @@ export default function JobEditor({ jobId, onDone }: Props) {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cronPreview, setCronPreview] = useState<string>("");
   const [testRunning, setTestRunning] = useState(false);
 
   const [name, setName] = useState("");
@@ -64,16 +64,6 @@ export default function JobEditor({ jobId, onDone }: Props) {
   }, [jobId]);
 
   // Live cron preview
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      if (!cronExpression) return setCronPreview("");
-      api.cron.describe(cronExpression, timezone).then((r) => {
-        setCronPreview(r.ok && r.text ? r.text : `invalid: ${r.error || "parse error"}`);
-      });
-    }, 200);
-    return () => clearTimeout(handle);
-  }, [cronExpression, timezone]);
-
   function hydrate(j: Job) {
     setName(j.name);
     setDescription(j.description ?? "");
@@ -211,20 +201,12 @@ export default function JobEditor({ jobId, onDone }: Props) {
 
           <Grid columns="3" gap="3">
             <Box style={{ gridColumn: "span 2" }}>
-              <Text size="2" weight="medium" as="div" mb="1">Cron expression</Text>
-              <TextField.Root
+              <Text size="2" weight="medium" as="div" mb="1">Schedule</Text>
+              <CronBuilder
                 value={cronExpression}
-                onChange={(e) => setCronExpression(e.target.value)}
-                size="3"
-                style={{ fontFamily: "monospace" }}
+                onChange={setCronExpression}
+                timezone={timezone}
               />
-              <Box mt="2" style={{ minHeight: 22 }}>
-                {cronPreview ? (
-                  <Text size="2" color={cronPreview.startsWith("invalid") ? "red" : "gray"}>
-                    {cronPreview}
-                  </Text>
-                ) : null}
-              </Box>
             </Box>
             <Box>
               <Text size="2" weight="medium" as="div" mb="1">Timezone</Text>

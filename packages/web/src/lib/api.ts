@@ -44,5 +44,10 @@ export const api = {
       if (tz) q.set("tz", tz);
       return request<{ ok: boolean; text?: string; error?: string }>("GET", `/api/cron/describe?${q}`);
     },
+    next: (expr: string, tz?: string, count = 5) => {
+      const q = new URLSearchParams({ expr, count: String(count) });
+      if (tz) q.set("tz", tz);
+      return request<{ ok: boolean; runs?: string[]; error?: string }>("GET", `/api/cron/next?${q}`);
+    },
   },
 };
