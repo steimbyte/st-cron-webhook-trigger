@@ -7,7 +7,12 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "isolatedModules": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "baseUrl": ".",
+    "paths": {
+      "@cronboard/core": ["../core/src"],
+      "@cronboard/core/*": ["../core/src/*"]
+    }
   },
   "include": ["src", "vite.config.ts"],
   "types": ["vite/client"]

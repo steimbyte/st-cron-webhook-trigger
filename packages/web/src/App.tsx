@@ -7,15 +7,14 @@ import {
   Heading,
   Text,
   Button,
-  Card,
-  Badge,
-  Tabs,
-  Grid,
   Separator,
 } from "@radix-ui/themes";
 import { GearIcon, ClockIcon, CounterClockwiseClockIcon, ActivityLogIcon, PlusIcon } from "@radix-ui/react-icons";
 import "@radix-ui/themes/styles.css";
 import "./styles.css";
+
+import { BackgroundMesh } from "./components/BackgroundMesh";
+import { GlassCard } from "./components/GlassCard";
 
 import Dashboard from "./pages/Dashboard";
 import JobsPage from "./pages/JobsPage";
@@ -53,8 +52,9 @@ export default function App() {
 
   return (
     <Theme appearance="dark" accentColor="violet" grayColor="slate" radius="medium" scaling="100%">
+      <BackgroundMesh />
       <Flex style={{ minHeight: "100vh" }}>
-        {/* Sidebar */}
+        {/* Sidebar — solid Radix panel (per design decision #3) */}
         <Box
           style={{
             width: 240,
@@ -100,7 +100,7 @@ export default function App() {
 
             <Box style={{ marginTop: "auto" }}>
               {serverInfo ? (
-                <Card>
+                <GlassCard strong p="3">
                   <Flex direction="column" gap="1">
                     <Flex align="center" gap="2">
                       <Box
@@ -119,7 +119,7 @@ export default function App() {
                       v{serverInfo.version}
                     </Text>
                   </Flex>
-                </Card>
+                </GlassCard>
               ) : null}
             </Box>
           </Flex>

@@ -1,0 +1,289 @@
+# OpenSpec configuration for the cronboard project.
+# Consumed by the SDD pipeline (sdd-init / sdd-propose / sdd-apply / sdd-verify / sdd-archive).
+# Single source of truth for project context, testing, rules and phase flow.
+
+schema: openspec/v1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project
+# ─────────────────────────────────────────────────────────────────────────────
+
+project:
+  name: cronboard
+  display_name: Cronboard
+  version: 0.1.0
+  description: >-
+    Local-first cron scheduler with a Radix Themes web frontend. Run, edit
+    and monitor cron jobs visually — trigger webhooks, run shell commands,
+    log runs.
+  license: MIT
+  private: true
+  repository:
+    branch: master
+    initialized: true
+  package_manager: npm
+  node:
+    engine: ">=20"
+  workspaces:
+    - packages/core
+    - packages/web
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tech stack
+# Mirrors the README "Tech stack" table. This block is descriptive context
+# for SDD agents — it does NOT install anything.
+# ─────────────────────────────────────────────────────────────────────────────
+
+tech_stack:
+  language: typescript
+  module_system: esm
+
+  typescript:
+    strict: true
+    target: ES2022
+    module: ESNext
+    module_resolution: Bundler
+    esModuleInterop: true
+    forceConsistentCasingInFileNames: true
+    noImplicitOverride: true
+    noFallthroughCasesInSwitch: true
+    skipLibCheck: true
+    resolveJsonModule: true
+    isolatedModules: true
+
+  backend:
+    name: "@cronboard/core"
+    runtime: node
+    http: fastify
+    http_extras:
+      - "@fastify/cors"
+      - "@fastify/static"
+    cron: croner
+    cron_human: cronstrue
+    http_client: undici
+    validation: zod
+    cli: commander
+    logging: pino
+    dev_runtime: tsx
+
+  frontend:
+    name: "@cronboard/web"
+    bundler: vite
+    framework: react
+    react_version: "18"
+    design_system: "@radix-ui/themes"
+    design_system_version: "3"
+    icons: "@radix-ui/react-icons"
+    router: react-router-dom
+    cron_human: cronstrue
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Source layout — what SDD agents are allowed to read and (later) modify
+# ─────────────────────────────────────────────────────────────────────────────
+
+source_layout:
+  protected_roots:
+    # sdd-init, sdd-propose and sdd-archive must NOT modify these.
+    # Only sdd-apply touches them, and only with an approved change under
+    # openspec/changes/<change-id>/.
+    - packages/
+
+  core:
+    root: packages/core
+    entry_cli: packages/core/src/cli.ts
+    entry_server: packages/core/src/server.ts
+    modules:
+      - scheduler/
+      - store/
+      - actions/
+      - schemas.ts
+      - types.ts
+      - config.ts
+      - logger.ts
+      - daemon.ts
+
+  web:
+    root: packages/web
+    entry: packages/web/src/main.tsx
+    pages:
+      - Dashboard
+      - Jobs
+      - Editor
+      - Runs
+      - Settings
+    shared:
+      - lib/api.ts
+      - types.ts
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testing
+# ─────────────────────────────────────────────────────────────────────────────
+
+testing:
+  strict_tdd: true
+
+  unit:
+    runner: "node --test --import tsx"
+    command: "npm test"
+    glob: "packages/core/src/**/*.test.ts"
+    note: >-
+      The runner is wired (see "test" in root package.json) and the glob
+      is in place, but no `*.test.ts` files are committed yet. sdd-apply
+      MUST add the first failing test for any new behavior in
+      packages/core/ before producing production code. Web unit tests
+      are not currently set up; add them when the first pure-function
+      helper lands in packages/web/src/.
+
+  typecheck:
+    core: "npm run typecheck -w packages/core"
+    web:  "npm run typecheck -w packages/web"
+    all:  "npm run typecheck"
+
+  smoke:
+    command: "powershell -ExecutionPolicy Bypass -File scripts/smoke.ps1"
+    description: >-
+      Boots the daemon on :3738 against an isolated `.smoke/` data dir,
+      hits every API endpoint, asserts the built UI is served, tears down.
+    additional_scripts:
+      - scripts/smoke.ps1
+      - scripts/typecheck.ps1
+      - scripts/typecheck-web.ps1
+      - scripts/detach-test.ps1
+      - scripts/test-cron-builder.ps1
+
+  build:
+    command: "npm run build"
+    description: "tsc (web) --noEmit + vite build + copy-web into core/dist/web"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rules — project-enforced constraints, picked up by sdd-verify and reviewers
+# ─────────────────────────────────────────────────────────────────────────────
+
+rules:
+  - id: strict-typescript
+    description: >-
+      TS strict + ESM. No unjustified `any` in production code, no
+      implicit override, no fallthrough in switch, no `// @ts-ignore`
+      without a linked issue.
+    enforced_by: typescript
+
+  - id: node-20-only
+    description: "engines.node >=20. Do not introduce Node 22-only syntax or 18-era polyfills."
+    enforced_by: package.json
+
+  - id: radix-themes-only
+    description: >-
+      Single design system: @radix-ui/themes v3 + @radix-ui/react-icons.
+      No Tailwind, no shadcn, no other utility-CSS framework, no parallel
+      component library. CSS lives in packages/web/src/styles.css.
+    enforced_by: code-review
+
+  - id: local-first-default-bind
+    description: >-
+      Default bind 127.0.0.1, no auth. Binding to 0.0.0.0 requires
+      --token and bearer auth on /api/*.
+    enforced_by: code-review
+
+  - id: windows-aware-storage
+    description: >-
+      JSON writes go through temp + rename with EPERM/EACCES/EBUSY retry
+      (5x exponential backoff) and a direct-overwrite fallback. fs.watch
+      MUST use the mtime cache + debounce + re-entry guard. Do not bypass
+      the per-file mutex on reads.
+    enforced_by: code-review
+
+  - id: private-monorepo
+    description: >-
+      Both packages are private. Do not add publish scripts, do not flip
+      `"private": false`. `npm publish` is forbidden at the workspace root.
+    enforced_by: package.json
+
+  - id: no-source-touch-in-sdd-init
+    description: >-
+      sdd-init, sdd-propose and sdd-archive MUST NOT modify files under
+      packages/. Only openspec/ artifacts and governance files
+      (AGENTS.md, .atl/) are in scope for those phases.
+    enforced_by: process
+
+  - id: append-only-sdd-artifacts
+    description: >-
+      Never delete or rewrite prior phase artifacts in openspec/. New
+      work goes under openspec/changes/<change-id>/.
+    enforced_by: process
+
+  - id: test-coverage-gap-disclosed
+    description: >-
+      Until at least one `*.test.ts` exists under packages/core/src,
+      strict_tdd is configured but not yet enforceable for new behavior.
+      sdd-apply MUST surface this gap before landing any feature change
+      and add the missing test in the same change.
+    enforced_by: process
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SDD phase pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+
+phases:
+  pipeline:
+    - id: sdd-init
+      role: bootstrap openspec scaffolding (this file)
+      status: active
+
+    - id: sdd-propose
+      role: draft a change under openspec/changes/
+      input: openspec/config.yaml
+      output:
+        - openspec/changes/<change-id>/proposal.md
+        - openspec/changes/<change-id>/tasks.md
+        - openspec/changes/<change-id>/design.md   # optional, for non-trivial changes
+
+    - id: sdd-apply
+      role: implement the change in code
+      gates:
+        - "rule: test-coverage-gap-disclosed"   # first test written for new behavior
+        - "testing.typecheck.all"
+        - "testing.smoke"
+
+    - id: sdd-verify
+      role: review the change against proposal.md and tasks.md
+      inputs:
+        - openspec/changes/<change-id>/proposal.md
+        - openspec/changes/<change-id>/tasks.md
+        - git diff vs. branch base
+
+    - id: sdd-archive
+      role: move completed change to openspec/changes/archive/
+      rule: append-only-sdd-artifacts
+
+  implementation_status:
+    note: >-
+      The README's "Phase 1-10" refers to internal implementation
+      milestones (CLI, scheduler, storage, server, daemon, UI pages,
+      watcher, smoke). They map to a single shipped v0.1.0 commit
+      (eb5d972). This config is the post-v0.1 starting point for the
+      OpenSpec flow.
+    releases:
+      - version: 0.1.0
+        commit: eb5d972
+        shipped: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Memory backend
+# ─────────────────────────────────────────────────────────────────────────────
+
+memory:
+  backend: openspec
+  engram: unavailable
+  paths:
+    project_context: openspec/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Governance
+# ─────────────────────────────────────────────────────────────────────────────
+
+governance:
+  agents_md: ./AGENTS.md
+  skill_registry: ./.atl/skill-registry.md
+  skill_registry_status: not-created   # see report; the parent should inject indexed skill paths
+
+change_log_dir: openspec/changes

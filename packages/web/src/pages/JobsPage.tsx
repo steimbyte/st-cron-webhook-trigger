@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Card,
   Flex,
   Heading,
   Text,
@@ -17,6 +16,7 @@ import {
 import { Pencil1Icon, PlayIcon, TrashIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { api } from "../lib/api";
 import type { Job } from "../types";
+import { GlassCard } from "../components/GlassCard";
 
 interface Props {
   onEdit: (id: string) => void;
@@ -44,7 +44,7 @@ export default function JobsPage({ onEdit }: Props) {
 
   return (
     <Flex direction="column" gap="4">
-      <Card>
+      <GlassCard>
         <Flex align="center" gap="3" wrap="wrap">
           <TextField.Root
             placeholder="Search jobs…"
@@ -69,9 +69,9 @@ export default function JobsPage({ onEdit }: Props) {
             {jobs === null ? "…" : `${filtered?.length ?? 0} of ${jobs.length}`}
           </Text>
         </Flex>
-      </Card>
+      </GlassCard>
 
-      <Card>
+      <GlassCard>
         {jobs === null ? (
           <Text size="2" color="gray">loading…</Text>
         ) : (filtered ?? []).length === 0 ? (
@@ -150,7 +150,7 @@ export default function JobsPage({ onEdit }: Props) {
             </Table.Body>
           </Table.Root>
         )}
-      </Card>
+      </GlassCard>
 
       <AlertDialog.Root open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialog.Content>

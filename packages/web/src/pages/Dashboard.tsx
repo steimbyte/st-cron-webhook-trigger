@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
 import {
-  Card,
   Flex,
   Heading,
   Text,
   Grid,
   Badge,
   Button,
-  Box,
   Separator,
   Table,
 } from "@radix-ui/themes";
-import { ChevronRightIcon, ExternalLinkIcon } from "@radix-ui/react-icons";
+import { ChevronRightIcon } from "@radix-ui/react-icons";
 import { api } from "../lib/api";
 import type { Job, Run } from "../types";
+import { GlassCard } from "../components/GlassCard";
 
 interface Props {
   onNavigate: (v: any) => void;
@@ -33,22 +32,22 @@ export default function Dashboard({ onNavigate }: Props) {
   return (
     <Flex direction="column" gap="5">
       <Grid columns="3" gap="4">
-        <Card>
+        <GlassCard>
           <Text size="2" color="gray">Active jobs</Text>
           <Heading size="7">{jobs ? jobs.filter((j) => j.enabled).length : "…"}</Heading>
-        </Card>
-        <Card>
+        </GlassCard>
+        <GlassCard>
           <Text size="2" color="gray">All jobs</Text>
           <Heading size="7">{jobs ? jobs.length : "…"}</Heading>
-        </Card>
-        <Card>
+        </GlassCard>
+        <GlassCard>
           <Text size="2" color="gray">Runs (24h)</Text>
           <Heading size="7">{runs ? recentCount(runs, 24 * 60 * 60 * 1000) : "…"}</Heading>
-        </Card>
+        </GlassCard>
       </Grid>
 
       <Grid columns="2" gap="4">
-        <Card>
+        <GlassCard>
           <Flex direction="column" gap="3">
             <Flex align="center">
               <Heading size="4">Upcoming runs</Heading>
@@ -85,9 +84,9 @@ export default function Dashboard({ onNavigate }: Props) {
               </Flex>
             )}
           </Flex>
-        </Card>
+        </GlassCard>
 
-        <Card>
+        <GlassCard>
           <Flex direction="column" gap="3">
             <Flex align="center">
               <Heading size="4">Recent runs</Heading>
@@ -125,10 +124,10 @@ export default function Dashboard({ onNavigate }: Props) {
               </Table.Root>
             )}
           </Flex>
-        </Card>
+        </GlassCard>
       </Grid>
 
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="3">
           <Heading size="4">Quick start</Heading>
           <Separator size="4" />
@@ -139,7 +138,7 @@ export default function Dashboard({ onNavigate }: Props) {
             <Text size="2" color="gray">Or use the UI: click "New job" in the top right.</Text>
           </Flex>
         </Flex>
-      </Card>
+      </GlassCard>
     </Flex>
   );
 }

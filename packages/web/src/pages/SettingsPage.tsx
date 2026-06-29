@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Card,
   Flex,
   Heading,
   Text,
@@ -12,6 +11,7 @@ import {
   Badge,
   Callout,
 } from "@radix-ui/themes";
+import { GlassCard } from "../components/GlassCard";
 
 export default function SettingsPage() {
   const [info, setInfo] = useState<any>(null);
@@ -22,7 +22,7 @@ export default function SettingsPage() {
 
   return (
     <Flex direction="column" gap="4">
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="3">
           <Heading size="4">Server info</Heading>
           <Separator size="4" />
@@ -37,9 +37,9 @@ export default function SettingsPage() {
             <Text size="2" color="gray">loading…</Text>
           )}
         </Flex>
-      </Card>
+      </GlassCard>
 
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="3">
           <Heading size="4">How to start cronboard</Heading>
           <Separator size="4" />
@@ -56,9 +56,9 @@ export default function SettingsPage() {
             </Text>
           </Flex>
         </Flex>
-      </Card>
+      </GlassCard>
 
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="3">
           <Heading size="4">Storage</Heading>
           <Separator size="4" />
@@ -73,7 +73,7 @@ export default function SettingsPage() {
             Override via env <code>CRONBOARD_DATA_DIR</code>.
           </Text>
         </Flex>
-      </Card>
+      </GlassCard>
 
       <Callout.Root>
         <Callout.Text>

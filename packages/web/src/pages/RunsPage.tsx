@@ -15,6 +15,7 @@ import {
 } from "@radix-ui/themes";
 import { api } from "../lib/api";
 import type { Run, RunStatus } from "../types";
+import { GlassCard } from "../components/GlassCard";
 
 const STATUSES: ("all" | RunStatus)[] = ["all", "success", "partial", "failed", "timeout", "running"];
 
@@ -34,7 +35,7 @@ export default function RunsPage() {
 
   return (
     <Flex direction="column" gap="4">
-      <Card>
+      <GlassCard>
         <Flex align="center" gap="3">
           <Heading size="3">All runs</Heading>
           <Select.Root value={filter} onValueChange={(v) => setFilter(v as any)}>
@@ -49,9 +50,9 @@ export default function RunsPage() {
             {runs === null ? "…" : `${filtered?.length ?? 0} of ${runs.length}`}
           </Text>
         </Flex>
-      </Card>
+      </GlassCard>
 
-      <Card>
+      <GlassCard>
         {runs === null ? (
           <Text size="2" color="gray">loading…</Text>
         ) : (filtered ?? []).length === 0 ? (
@@ -89,7 +90,7 @@ export default function RunsPage() {
             </Table.Body>
           </Table.Root>
         )}
-      </Card>
+      </GlassCard>
 
       <Dialog.Root open={!!openRun} onOpenChange={(o) => !o && setOpenRun(null)}>
         {openRun ? (

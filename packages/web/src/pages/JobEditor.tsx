@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Card,
   Flex,
   Heading,
   Text,
@@ -18,6 +17,7 @@ import {
 } from "@radix-ui/themes";
 import { PlusIcon, TrashIcon, PlayIcon, GlobeIcon, CodeIcon } from "@radix-ui/react-icons";
 import CronBuilder from "../components/CronBuilder";
+import { GlassCard } from "../components/GlassCard";
 import { api } from "../lib/api";
 import type { Job, JobAction, WebhookConfig, ShellConfig } from "../types";
 
@@ -63,7 +63,6 @@ export default function JobEditor({ jobId, onDone }: Props) {
     }
   }, [jobId]);
 
-  // Live cron preview
   function hydrate(j: Job) {
     setName(j.name);
     setDescription(j.description ?? "");
@@ -102,14 +101,12 @@ export default function JobEditor({ jobId, onDone }: Props) {
     setTestRunning(true);
     setError(null);
     try {
-      // Save first if needed (so run target exists)
       const payload = { name, description, cronExpression, timezone, enabled, actions };
       let targetId = jobId;
       if (!targetId) {
         const j = await api.jobs.create(payload);
         targetId = j.id;
         hydrate(j);
-        // After save we want to keep editing — jump to "edit" mode by replacing URL/state
       } else {
         await api.jobs.update(targetId, payload);
       }
@@ -169,7 +166,7 @@ export default function JobEditor({ jobId, onDone }: Props) {
         </Callout.Root>
       ) : null}
 
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="4">
           <Flex gap="3" wrap="wrap">
             <Box style={{ flex: 1, minWidth: 240 }}>
@@ -221,9 +218,9 @@ export default function JobEditor({ jobId, onDone }: Props) {
             </Box>
           </Grid>
         </Flex>
-      </Card>
+      </GlassCard>
 
-      <Card>
+      <GlassCard>
         <Flex direction="column" gap="3">
           <Flex align="center">
             <Heading size="4">Actions</Heading>
@@ -258,7 +255,7 @@ export default function JobEditor({ jobId, onDone }: Props) {
             </Flex>
           )}
         </Flex>
-      </Card>
+      </GlassCard>
 
       <Flex gap="2" justify="end">
         <Button variant="soft" color="gray" onClick={onDone}>Cancel</Button>
@@ -285,7 +282,7 @@ function ActionEditor({
   onRemove: () => void;
 }) {
   return (
-    <Card>
+    <GlassCard>
       <Flex direction="column" gap="3">
         <Flex align="center">
           <Badge color={action.type === "webhook" ? "violet" : "cyan"}>
@@ -313,7 +310,7 @@ function ActionEditor({
           />
         )}
       </Flex>
-    </Card>
+    </GlassCard>
   );
 }
 

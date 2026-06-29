@@ -48,7 +48,7 @@ pre.cb-code {
   word-break: break-all;
 }
 
-/* Cron-input grid helpers */
+/* Cron-input grid helpers (legacy; CronBuilder now uses Calendar/Clock) */
 .cb-cron-grid {
   display: grid;
   grid-template-columns: 60px 1fr;
@@ -73,4 +73,192 @@ pre.cb-code {
   outline: none;
   border-color: var(--accent-8);
   box-shadow: 0 0 0 1px var(--accent-8);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Glass design system — additive on top of Radix Themes tokens.
+   See openspec/changes/phase-11-ui-rework/design.md §2.
+   ──────────────────────────────────────────────────────────────────────── */
+
+:root,
+[data-theme="dark"] {
+  --cb-glass-bg:        rgba(255, 255, 255, 0.06);
+  --cb-glass-bg-strong: rgba(255, 255, 255, 0.10);
+  --cb-glass-border:    rgba(255, 255, 255, 0.14);
+  --cb-glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.18);
+  --cb-glass-blur:      blur(14px) saturate(180%);
+
+  /* Ambient background mesh (radial gradient stops). */
+  --cb-mesh-1: radial-gradient(at 12% 14%, rgba(124, 58, 237, 0.40) 0px, transparent 50%);
+  --cb-mesh-2: radial-gradient(at 92% 6%,  rgba(56, 189, 248, 0.30) 0px, transparent 50%);
+  --cb-mesh-3: radial-gradient(at 50% 95%, rgba(236, 72, 153, 0.20) 0px, transparent 55%);
+  --cb-mesh-blur: 60px;
+}
+
+/* Light-theme variant — used only if a user overrides Radix to appearance="light". */
+@media (prefers-color-scheme: light) {
+  :root {
+    --cb-glass-bg:        rgba(255, 255, 255, 0.55);
+    --cb-glass-bg-strong: rgba(255, 255, 255, 0.65);
+    --cb-glass-border:    rgba(15, 23, 42, 0.10);
+    --cb-glass-shadow:    0 8px 24px rgba(15, 23, 42, 0.10);
+    --cb-mesh-1: radial-gradient(at 12% 14%, rgba(124, 58, 237, 0.18) 0px, transparent 50%);
+    --cb-mesh-2: radial-gradient(at 92% 6%,  rgba(56, 189, 248, 0.16) 0px, transparent 50%);
+    --cb-mesh-3: radial-gradient(at 50% 95%, rgba(236, 72, 153, 0.12) 0px, transparent 55%);
+  }
+}
+
+.cb-glass {
+  background: var(--cb-glass-bg);
+  border: 1px solid var(--cb-glass-border);
+  backdrop-filter: var(--cb-glass-blur);
+  -webkit-backdrop-filter: var(--cb-glass-blur);
+  box-shadow: var(--cb-glass-shadow);
+  border-radius: var(--radius-3);
+  position: relative;
+}
+
+.cb-glass-strong {
+  background: var(--cb-glass-bg-strong);
+  border: 1px solid var(--cb-glass-border);
+  backdrop-filter: var(--cb-glass-blur);
+  -webkit-backdrop-filter: var(--cb-glass-blur);
+  box-shadow: var(--cb-glass-shadow);
+  border-radius: var(--radius-3);
+  position: relative;
+}
+
+/* Focus ring on every interactive glass element. */
+.cb-glass:focus-within,
+.cb-glass-strong:focus-within {
+  outline: 2px solid var(--accent-8);
+  outline-offset: 2px;
+}
+
+/* Fallback for browsers without backdrop-filter (Firefox ESR, Safari < 18). */
+@supports not (backdrop-filter: blur(14px)) {
+  .cb-glass,
+  .cb-glass-strong {
+    background: var(--color-panel-solid);
+  }
+}
+
+/* Ambient background mesh — fixed, behind the layout, non-interactive. */
+.cb-mesh {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  filter: blur(var(--cb-mesh-blur));
+  background:
+    var(--cb-mesh-1),
+    var(--cb-mesh-2),
+    var(--cb-mesh-3),
+    var(--color-background);
+  animation: cb-mesh-drift 60s linear infinite alternate;
+  pointer-events: none;
+  will-change: transform;
+}
+
+@keyframes cb-mesh-drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-8%, 4%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-mesh {
+    animation: none;
+  }
+}
+
+/* react-day-picker (v9) — variable overrides that read from Radix Themes tokens. */
+.rdp-root {
+  --rdp-accent-color:              var(--accent-9);
+  --rdp-accent-background-color:   var(--accent-a3);
+  --rdp-background-color:          transparent;
+  --rdp-day_button-border-radius:  var(--radius-2);
+  --rdp-day-height:                36px;
+  --rdp-day-width:                 36px;
+  --rdp-selected-border:           2px solid var(--accent-8);
+  color: var(--gray-12);
+  font-family: var(--default-font-family);
+}
+.rdp-day_button:hover {
+  background: var(--accent-a3);
+}
+.rdp-day_button:focus-visible {
+  outline: 2px solid var(--accent-8);
+  outline-offset: 1px;
+}
+.rdp-caption_label {
+  color: var(--gray-12);
+  font-weight: 600;
+}
+.rdp-nav button {
+  color: var(--gray-11);
+}
+.rdp-head_cell {
+  color: var(--gray-11);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rdp-day_selected,
+.rdp-day_selected:hover {
+  background: var(--accent-9);
+  color: var(--accent-contrast);
+}
+.rdp-day_today:not(.rdp-day_selected) {
+  color: var(--accent-11);
+  font-weight: 600;
+}
+
+/* react-aria-components TimeField — segmented HH:MM input. */
+.cb-timefield {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--gray-2);
+  border: 1px solid var(--gray-a5);
+  border-radius: var(--radius-2);
+  padding: 4px 8px;
+  font-family: var(--default-font-family);
+  font-variant-numeric: tabular-nums;
+}
+.cb-timefield[data-focus-within] {
+  outline: 2px solid var(--accent-8);
+  outline-offset: 1px;
+  border-color: var(--accent-8);
+}
+.cb-timefield-segment {
+  padding: 2px 4px;
+  color: var(--gray-12);
+  border-radius: var(--radius-1);
+  min-width: 1.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+  outline: none;
+}
+.cb-timefield-segment[data-focused] {
+  background: var(--accent-a3);
+  color: var(--gray-12);
+}
+.cb-timefield-segment[data-placeholder] {
+  color: var(--gray-9);
+}
+.cb-timefield-separator {
+  color: var(--gray-9);
+}
+
+/* CronBuilder — visual tweaks for the per-tab layout. */
+.cb-cronbuilder-tabs .rt-TabsList {
+  width: 100%;
+  flex-wrap: wrap;
+}
+.cb-cronbuilder-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
 }
