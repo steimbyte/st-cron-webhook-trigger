@@ -1,17 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@cronboard/core": path.resolve(__dirname, "../core/src"),
-    },
-  },
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     proxy: {
@@ -25,5 +18,10 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     emptyOutDir: true,
+  },
+  resolve: {
+    alias: {
+      "@cronboard/core/scheduler/cronExpr": path.resolve(__dirname, "../core/src/scheduler/cronExpr.ts"),
+    },
   },
 });

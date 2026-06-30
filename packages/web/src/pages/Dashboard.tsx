@@ -1,21 +1,83 @@
 import { useEffect, useState } from "react";
 import {
-  Flex,
-  Heading,
-  Text,
-  Grid,
-  Badge,
-  Button,
-  Separator,
-  Table,
-} from "@radix-ui/themes";
-import { ChevronRightIcon } from "@radix-ui/react-icons";
+  ArrowTopRightIcon,
+  CalendarIcon,
+  CheckCircledIcon,
+  CircleBackslashIcon,
+  ClockIcon,
+  CrossCircledIcon,
+  LightningBoltIcon,
+  PlayIcon as PlayIcon,
+} from "@radix-ui/react-icons";
 import { api } from "../lib/api";
 import type { Job, Run } from "../types";
-import { GlassCard } from "../components/GlassCard";
 
 interface Props {
   onNavigate: (v: any) => void;
+}
+
+function MiniSparkline({ values, color = "var(--color-primary)" }: { values: number[]; color?: string }) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const w = 80, h = 24;
+  const step = w / (values.length - 1);
+  const points = values
+    .map((v, i) => `${i * step},${h - ((v - min) / range) * h}`)
+    .join(" ");
+  return (
+    <svg width={w} height={h} className="opacity-80">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  delta,
+  deltaTone = "up",
+  sparkline,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  delta?: string;
+  deltaTone?: "up" | "down";
+  sparkline?: number[];
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="card bg-base-200/60 border border-base-300/60 shadow-sm">
+      <div className="card-body p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-base-content/50 font-medium">
+              {label}
+            </div>
+            <div className="text-2xl font-bold mt-1.5 text-base-content">{value}</div>
+          </div>
+          {icon ? (
+            <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              {icon}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          {delta ? (
+            <span className={`text-xs font-medium flex items-center gap-1 ${deltaTone === "up" ? "text-success" : "text-error"}`}>
+              <ArrowTopRightIcon className={deltaTone === "down" ? "rotate-180" : ""} />
+              {delta}
+            </span>
+          ) : (
+            <span />
+          )}
+          {sparkline ? <MiniSparkline values={sparkline} color={deltaTone === "down" ? "var(--color-error)" : "var(--color-success)"} /> : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard({ onNavigate }: Props) {
@@ -23,141 +85,249 @@ export default function Dashboard({ onNavigate }: Props) {
   const [runs, setRuns] = useState<Run[] | null>(null);
 
   useEffect(() => {
-    Promise.all([api.jobs.list(), api.runs.list({ limit: 20 })]).then(([j, r]) => {
+    Promise.all([api.jobs.list(), api.runs.list({ limit: 50 })]).then(([j, r]) => {
       setJobs(j);
       setRuns(r);
     });
   }, []);
 
+  const active = jobs?.filter((j) => j.enabled).length ?? 0;
+  const total = jobs?.length ?? 0;
+  const last24h = runs?.filter((r) => Date.now() - new Date(r.startedAt).getTime() < 86400000).length ?? 0;
+  const failed24h = runs?.filter(
+    (r) => (r.status === "failed" || r.status === "partial") && Date.now() - new Date(r.startedAt).getTime() < 86400000,
+  ).length ?? 0;
+  const successRate =
+    last24h > 0 ? Math.round((100 * (last24h - failed24h)) / last24h) : 100;
+
+  // Build a per-hour success/failure histogram for the last 24h
+  const histogram = Array.from({ length: 24 }, (_, h) => {
+    const cutoff = Date.now() - (23 - h) * 3600000;
+    const inHour = (runs ?? []).filter((r) => {
+      const t = new Date(r.startedAt).getTime();
+      return t >= cutoff && t < cutoff + 3600000;
+    });
+    return inHour.length;
+  });
+
+  const upcoming = (jobs ?? [])
+    .filter((j) => j.enabled && j.nextRunAt)
+    .sort((a, b) => (a.nextRunAt! < b.nextRunAt! ? -1 : 1))
+    .slice(0, 5);
+
+  const recentRuns = (runs ?? []).slice(0, 8);
+  const recentFailures = (runs ?? []).filter((r) => r.status === "failed").slice(0, 5);
+
   return (
-    <Flex direction="column" gap="5">
-      <Grid columns="3" gap="4">
-        <GlassCard>
-          <Text size="2" color="gray">Active jobs</Text>
-          <Heading size="7">{jobs ? jobs.filter((j) => j.enabled).length : "…"}</Heading>
-        </GlassCard>
-        <GlassCard>
-          <Text size="2" color="gray">All jobs</Text>
-          <Heading size="7">{jobs ? jobs.length : "…"}</Heading>
-        </GlassCard>
-        <GlassCard>
-          <Text size="2" color="gray">Runs (24h)</Text>
-          <Heading size="7">{runs ? recentCount(runs, 24 * 60 * 60 * 1000) : "…"}</Heading>
-        </GlassCard>
-      </Grid>
+    <div className="space-y-5">
+      {/* Page header */}
+      <div className="flex items-end justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-base-content/60">
+            Real-time overview of all your scheduled jobs.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn btn-ghost btn-sm" onClick={() => onNavigate({ kind: "runs" })}>
+            View runs
+          </button>
+          <button className="btn btn-primary btn-sm gap-1" onClick={() => onNavigate({ kind: "editor" })}>
+            <LightningBoltIcon />
+            New job
+          </button>
+        </div>
+      </div>
 
-      <Grid columns="2" gap="4">
-        <GlassCard>
-          <Flex direction="column" gap="3">
-            <Flex align="center">
-              <Heading size="4">Upcoming runs</Heading>
-              <Button size="1" variant="ghost" style={{ marginLeft: "auto" }} onClick={() => onNavigate({ kind: "jobs" })}>
-                all jobs <ChevronRightIcon />
-              </Button>
-            </Flex>
-            <Separator size="4" />
-            {jobs === null ? (
-              <Text size="2" color="gray">loading…</Text>
-            ) : jobs.length === 0 ? (
-              <Flex direction="column" align="start" gap="2">
-                <Text size="2" color="gray">No jobs yet.</Text>
-                <Button size="2" onClick={() => onNavigate({ kind: "editor" })}>Create your first job</Button>
-              </Flex>
-            ) : (
-              <Flex direction="column" gap="2">
-                {jobs
-                  .filter((j) => j.enabled && j.nextRunAt)
-                  .sort((a, b) => (a.nextRunAt! < b.nextRunAt! ? -1 : 1))
-                  .slice(0, 5)
-                  .map((j) => (
-                    <Flex key={j.id} align="center" gap="2">
-                      <Badge color="gray" variant="soft">{j.cronExpression}</Badge>
-                      <Text size="2">{j.name}</Text>
-                      <Text size="1" color="gray" style={{ marginLeft: "auto" }}>
-                        next: {new Date(j.nextRunAt!).toLocaleString()}
-                      </Text>
-                    </Flex>
+      {/* KPI row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="Active jobs"
+          value={jobs === null ? "…" : active}
+          delta={jobs === null ? undefined : `${total} total`}
+          icon={<LightningBoltIcon />}
+        />
+        <StatCard
+          label="Runs (24h)"
+          value={runs === null ? "…" : last24h}
+          delta={last24h > 0 ? `+${last24h} today` : "—"}
+          sparkline={histogram}
+          icon={<ClockIcon />}
+        />
+        <StatCard
+          label="Failures (24h)"
+          value={runs === null ? "…" : failed24h}
+          delta={failed24h > 0 ? "needs attention" : "all green"}
+          deltaTone={failed24h > 0 ? "down" : "up"}
+          icon={<CrossCircledIcon />}
+        />
+        <StatCard
+          label="Success rate"
+          value={`${successRate}%`}
+          delta={successRate === 100 ? "perfect" : "stable"}
+          sparkline={histogram}
+          icon={<CheckCircledIcon />}
+        />
+      </div>
+
+      {/* Two-column main */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {/* Left column: upcoming + recent */}
+        <div className="xl:col-span-2 space-y-5">
+          <div className="card bg-base-200/60 border border-base-300/60">
+            <div className="card-body p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Upcoming runs</h2>
+                <span className="badge badge-ghost text-xs">next 5</span>
+              </div>
+              {upcoming.length === 0 ? (
+                <div className="text-center py-10">
+                  <CircleBackslashIcon className="w-10 h-10 text-base-content/20 mx-auto mb-2" />
+                  <p className="text-base-content/50 text-sm">No upcoming runs</p>
+                  <button className="btn btn-primary btn-sm mt-3" onClick={() => onNavigate({ kind: "editor" })}>
+                    Create a job
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-base-300/50">
+                  {upcoming.map((j) => (
+                    <li key={j.id} className="flex items-center gap-3 py-3">
+                      <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
+                        <ClockIcon />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{j.name}</div>
+                        <div className="text-xs text-base-content/60 truncate">
+                          <code className="font-mono">{j.cronExpression}</code> · {j.timezone}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">
+                          {j.nextRunAt && new Date(j.nextRunAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                        </div>
+                        <div className="text-xs text-base-content/50">
+                          {j.nextRunAt && new Date(j.nextRunAt).toLocaleString(undefined, { weekday: "short" })}
+                        </div>
+                      </div>
+                    </li>
                   ))}
-                {jobs.filter((j) => j.enabled && j.nextRunAt).length === 0 ? (
-                  <Text size="2" color="gray">No upcoming runs.</Text>
-                ) : null}
-              </Flex>
-            )}
-          </Flex>
-        </GlassCard>
+                </ul>
+              )}
+            </div>
+          </div>
 
-        <GlassCard>
-          <Flex direction="column" gap="3">
-            <Flex align="center">
-              <Heading size="4">Recent runs</Heading>
-              <Button size="1" variant="ghost" style={{ marginLeft: "auto" }} onClick={() => onNavigate({ kind: "runs" })}>
-                all runs <ChevronRightIcon />
-              </Button>
-            </Flex>
-            <Separator size="4" />
-            {runs === null ? (
-              <Text size="2" color="gray">loading…</Text>
-            ) : runs.length === 0 ? (
-              <Text size="2" color="gray">No runs yet.</Text>
-            ) : (
-              <Table.Root size="1">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Job</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>When</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {runs.slice(0, 8).map((r) => (
-                    <Table.Row key={r.id}>
-                      <Table.Cell>
-                        <RunStatusBadge status={r.status} />
-                      </Table.Cell>
-                      <Table.Cell>{r.jobName}</Table.Cell>
-                      <Table.Cell>{new Date(r.startedAt).toLocaleString()}</Table.Cell>
-                      <Table.Cell>{r.durationMs ? `${r.durationMs}ms` : "—"}</Table.Cell>
-                    </Table.Row>
+          <div className="card bg-base-200/60 border border-base-300/60">
+            <div className="card-body p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Recent runs</h2>
+                <button className="btn btn-ghost btn-xs" onClick={() => onNavigate({ kind: "runs" })}>
+                  View all
+                </button>
+              </div>
+              {recentRuns.length === 0 ? (
+                <p className="text-base-content/50 text-sm py-6 text-center">No runs yet.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr className="text-xs uppercase text-base-content/50">
+                        <th>Status</th>
+                        <th>Job</th>
+                        <th>Trigger</th>
+                        <th>Started</th>
+                        <th className="text-right">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentRuns.map((r) => (
+                        <tr key={r.id} className="hover">
+                          <td>
+                            <RunBadge status={r.status} />
+                          </td>
+                          <td className="font-medium">{r.jobName}</td>
+                          <td>
+                            <span className="badge badge-ghost badge-sm">{r.trigger}</span>
+                          </td>
+                          <td className="text-xs text-base-content/60">{new Date(r.startedAt).toLocaleString()}</td>
+                          <td className="text-right text-xs font-mono">
+                            {r.durationMs ? `${r.durationMs}ms` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: failures feed + tips */}
+        <div className="space-y-5">
+          <div className="card bg-base-200/60 border border-base-300/60">
+            <div className="card-body p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <CrossCircledIcon className="text-error" />
+                  Failures
+                </h2>
+              </div>
+              {recentFailures.length === 0 ? (
+                <div className="text-center py-6">
+                  <CheckCircledIcon className="w-10 h-10 text-success mx-auto mb-2" />
+                  <p className="text-success font-medium text-sm">No failures — everything's green</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {recentFailures.map((r) => (
+                    <li key={r.id} className="flex gap-3 items-start p-2 rounded-lg hover:bg-base-300/40 cursor-pointer"
+                        onClick={() => onNavigate({ kind: "runs", jobId: r.jobId })}>
+                      <div className="w-2 h-2 mt-2 rounded-full bg-error shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{r.jobName}</div>
+                        <div className="text-xs text-base-content/60 truncate">{r.error || "see run details"}</div>
+                      </div>
+                      <div className="text-xs text-base-content/40 shrink-0">
+                        {new Date(r.startedAt).toLocaleTimeString()}
+                      </div>
+                    </li>
                   ))}
-                </Table.Body>
-              </Table.Root>
-            )}
-          </Flex>
-        </GlassCard>
-      </Grid>
+                </ul>
+              )}
+            </div>
+          </div>
 
-      <GlassCard>
-        <Flex direction="column" gap="3">
-          <Heading size="4">Quick start</Heading>
-          <Separator size="4" />
-          <Flex direction="column" gap="2">
-            <Text size="2">
-              <code style={{ background: "var(--gray-3)", padding: "2px 4px", borderRadius: 3 }}>cronboard add my-job --cron '*/5 * * * *' --url https://example.com/ping</code>
-            </Text>
-            <Text size="2" color="gray">Or use the UI: click "New job" in the top right.</Text>
-          </Flex>
-        </Flex>
-      </GlassCard>
-    </Flex>
+          <div className="card bg-base-200/60 border border-base-300/60">
+            <div className="card-body p-5">
+              <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <CalendarIcon />
+                Quick start
+              </h2>
+              <ul className="text-sm space-y-2 text-base-content/70">
+                <li>
+                  <code className="text-xs px-1.5 py-0.5 rounded bg-base-300/60 font-mono">npm run add heartbeat --cron '*/5 * * * *' --url https://example.com/ping</code>
+                </li>
+                <li>
+                  <code className="text-xs px-1.5 py-0.5 rounded bg-base-300/60 font-mono">npm run add backup --cron '0 3 * * *' --command 'backup.sh'</code>
+                </li>
+                <li className="text-xs text-base-content/50 pt-1">Or click <strong>New job</strong> in the topbar.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function RunStatusBadge({ status }: { status: Run["status"] }) {
-  const color =
-    status === "success" ? "green" :
-    status === "failed" ? "red" :
-    status === "partial" ? "amber" :
-    status === "timeout" ? "orange" : "blue";
-  const label =
-    status === "success" ? "ok" :
-    status === "failed" ? "failed" :
-    status === "partial" ? "partial" :
-    status === "timeout" ? "timeout" : "running";
-  return <Badge color={color}>{label}</Badge>;
-}
-
-function recentCount(runs: Run[], windowMs: number): number {
-  const cutoff = Date.now() - windowMs;
-  return runs.filter((r) => new Date(r.startedAt).getTime() >= cutoff).length;
+export function RunBadge({ status }: { status: Run["status"] }) {
+  const map: Record<Run["status"], { cls: string; label: string }> = {
+    success: { cls: "badge-success", label: "ok" },
+    failed: { cls: "badge-error", label: "failed" },
+    partial: { cls: "badge-warning", label: "partial" },
+    timeout: { cls: "badge-warning", label: "timeout" },
+    running: { cls: "badge-info", label: "running" },
+  };
+  const { cls, label } = map[status];
+  return <span className={`badge ${cls} badge-sm`}>{label}</span>;
 }

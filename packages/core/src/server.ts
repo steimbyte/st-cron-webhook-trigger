@@ -44,7 +44,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
 
   app.get("/api/health", async () => ({
     status: "ok",
-    version: "0.1.0",
+    version: "0.2.0",
     time: new Date().toISOString(),
   }));
 

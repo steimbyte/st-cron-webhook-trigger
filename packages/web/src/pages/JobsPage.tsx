@@ -1,22 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-  Flex,
-  Heading,
-  Text,
-  Table,
-  Switch,
-  Button,
-  Badge,
-  IconButton,
-  AlertDialog,
-  Tooltip,
-  Select,
-  TextField,
-} from "@radix-ui/themes";
-import { Pencil1Icon, PlayIcon, TrashIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
+  CircleBackslashIcon,
+  MagnifyingGlassIcon,
+  Pencil1Icon as Pencil1Icon,
+  PlayIcon as PlayIcon,
+  PlusIcon as PlusIcon,
+  TrashIcon as TrashIcon,
+} from "@radix-ui/react-icons";
 import { api } from "../lib/api";
 import type { Job } from "../types";
-import { GlassCard } from "../components/GlassCard";
+import { RunBadge } from "./Dashboard";
 
 interface Props {
   onEdit: (id: string) => void;
@@ -43,140 +36,176 @@ export default function JobsPage({ onEdit }: Props) {
   });
 
   return (
-    <Flex direction="column" gap="4">
-      <GlassCard>
-        <Flex align="center" gap="3" wrap="wrap">
-          <TextField.Root
-            placeholder="Search jobs…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            size="2"
-            style={{ minWidth: 240 }}
-          >
-            <TextField.Slot>
-              <MagnifyingGlassIcon />
-            </TextField.Slot>
-          </TextField.Root>
-          <Select.Root value={filterEnabled} onValueChange={(v) => setFilterEnabled(v as any)}>
-            <Select.Trigger />
-            <Select.Content>
-              <Select.Item value="all">All</Select.Item>
-              <Select.Item value="enabled">Enabled only</Select.Item>
-              <Select.Item value="disabled">Disabled only</Select.Item>
-            </Select.Content>
-          </Select.Root>
-          <Text size="2" color="gray" style={{ marginLeft: "auto" }}>
-            {jobs === null ? "…" : `${filtered?.length ?? 0} of ${jobs.length}`}
-          </Text>
-        </Flex>
-      </GlassCard>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Jobs</h1>
+          <p className="text-sm text-base-content/60">All configured schedules.</p>
+        </div>
+        <button className="btn btn-primary btn-sm gap-1" onClick={() => onEdit("")}>
+          <PlusIcon />
+          New job
+        </button>
+      </div>
 
-      <GlassCard>
+      <div className="card bg-base-200/60 border border-base-300/60">
+        <div className="card-body p-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="input input-sm w-72 bg-base-300/40 border-base-300/60 flex items-center gap-2">
+              <MagnifyingGlassIcon />
+              <input
+                type="text"
+                placeholder="Search jobs…"
+                className="grow"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <div className="join">
+              {(["all", "enabled", "disabled"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={`btn btn-sm join-item ${filterEnabled === v ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setFilterEnabled(v)}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-base-content/50 ml-auto">
+              {jobs === null ? "loading…" : `${filtered?.length ?? 0} of ${jobs.length}`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="card bg-base-200/60 border border-base-300/60 overflow-hidden">
         {jobs === null ? (
-          <Text size="2" color="gray">loading…</Text>
+          <div className="p-10 text-center text-base-content/50">
+            <span className="loading loading-spinner loading-md" />
+          </div>
         ) : (filtered ?? []).length === 0 ? (
-          <Flex direction="column" align="center" gap="3" p="6">
-            <Text size="2" color="gray">No jobs yet.</Text>
-            <Button onClick={() => onEdit("")}>Create one</Button>
-          </Flex>
+          <div className="p-12 text-center">
+            <CircleBackslashIcon className="w-12 h-12 text-base-content/20 mx-auto mb-3" />
+            <p className="text-base-content/50 mb-3">No jobs yet.</p>
+            <button className="btn btn-primary btn-sm" onClick={() => onEdit("")}>
+              Create one
+            </button>
+          </div>
         ) : (
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell style={{ width: 60 }}>On</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Cron</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>TZ</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Next</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Last</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {(filtered ?? []).map((j) => (
-                <Table.Row key={j.id}>
-                  <Table.Cell>
-                    <Switch
-                      checked={j.enabled}
-                      onCheckedChange={async () => {
-                        await api.jobs.toggle(j.id);
-                        refresh();
-                      }}
-                    />
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Flex direction="column">
-                      <Text size="2" weight="medium">{j.name}</Text>
-                      {j.description ? <Text size="1" color="gray">{j.description}</Text> : null}
-                    </Flex>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge color="gray" variant="soft">{j.cronExpression}</Badge>
-                  </Table.Cell>
-                  <Table.Cell><Text size="1" color="gray">{j.timezone}</Text></Table.Cell>
-                  <Table.Cell>
-                    <Text size="1" color="gray">{j.nextRunAt ? new Date(j.nextRunAt).toLocaleString() : "—"}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="1" color="gray">{j.lastRunAt ? new Date(j.lastRunAt).toLocaleString() : "—"}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Flex gap="1">
-                      <Tooltip content="Edit">
-                        <IconButton variant="ghost" onClick={() => onEdit(j.id)}>
+          <div className="overflow-x-auto">
+            <table className="table table-sm">
+              <thead>
+                <tr className="text-xs uppercase text-base-content/50 bg-base-300/30">
+                  <th className="w-16">On</th>
+                  <th>Name</th>
+                  <th>Cron</th>
+                  <th>TZ</th>
+                  <th>Next</th>
+                  <th>Last</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(filtered ?? []).map((j) => (
+                  <tr key={j.id} className="hover">
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-primary toggle-sm"
+                        checked={j.enabled}
+                        onChange={async () => {
+                          await api.jobs.toggle(j.id);
+                          refresh();
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <div className="font-medium">{j.name}</div>
+                      {j.description ? (
+                        <div className="text-xs text-base-content/50">{j.description}</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <code className="text-xs px-1.5 py-0.5 rounded bg-base-300/60 font-mono">
+                        {j.cronExpression}
+                      </code>
+                    </td>
+                    <td className="text-xs text-base-content/60">{j.timezone}</td>
+                    <td className="text-xs text-base-content/60">
+                      {j.nextRunAt ? new Date(j.nextRunAt).toLocaleString() : "—"}
+                    </td>
+                    <td className="text-xs text-base-content/60">
+                      {j.lastRunAt ? new Date(j.lastRunAt).toLocaleString() : "—"}
+                    </td>
+                    <td className="text-right">
+                      <div className="join">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs join-item"
+                          onClick={() => onEdit(j.id)}
+                          title="Edit"
+                        >
                           <Pencil1Icon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip content="Run now">
-                        <IconButton
-                          variant="ghost"
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs join-item"
                           onClick={async () => {
                             await api.jobs.run(j.id);
                             refresh();
                           }}
+                          title="Run now"
                         >
                           <PlayIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip content="Delete">
-                        <IconButton variant="ghost" color="red" onClick={() => setConfirmDelete(j)}>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs join-item text-error"
+                          onClick={() => setConfirmDelete(j)}
+                          title="Delete"
+                        >
                           <TrashIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Flex>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </GlassCard>
+      </div>
 
-      <AlertDialog.Root open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <AlertDialog.Content>
-          <AlertDialog.Title>Delete "{confirmDelete?.name}"?</AlertDialog.Title>
-          <AlertDialog.Description>This cannot be undone. Run history will be preserved.</AlertDialog.Description>
-          <Flex justify="end" gap="2" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft" color="gray">Cancel</Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
-              <Button
-                color="red"
-                onClick={async () => {
-                  if (confirmDelete) {
-                    await api.jobs.remove(confirmDelete.id);
-                    setConfirmDelete(null);
-                    refresh();
-                  }
-                }}
-              >
-                Delete
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-    </Flex>
+      <dialog open={!!confirmDelete} className="modal">
+        <div className="modal-box bg-base-200 border border-base-300/60">
+          <h3 className="text-lg font-semibold">Delete "{confirmDelete?.name}"?</h3>
+          <p className="py-3 text-sm text-base-content/70">
+            This cannot be undone. Run history will be preserved.
+          </p>
+          <div className="modal-action">
+            <button className="btn btn-ghost" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-error"
+              onClick={async () => {
+                if (confirmDelete) {
+                  await api.jobs.remove(confirmDelete.id);
+                  setConfirmDelete(null);
+                  refresh();
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+    </div>
   );
 }

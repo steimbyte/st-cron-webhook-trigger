@@ -29,6 +29,7 @@ const executor: ActionExecutor = {
 
     let attempt = 0;
     let lastErr: unknown;
+    let lastResponse: { status: number; headers?: Record<string, string>; body?: string } | undefined;
 
     while (attempt <= retries.count) {
       try {
@@ -49,6 +50,7 @@ const executor: ActionExecutor = {
 
         const finishedAt = new Date();
         const ok = status >= 200 && status < 300;
+        lastResponse = { status, headers, body: body.slice(0, 8192) };
         const result: Partial<ActionRun> = {
           id,
           runId: ctx.runId,
@@ -78,6 +80,8 @@ const executor: ActionExecutor = {
       startedAt: startedAt.toISOString(),
       finishedAt: finishedAt.toISOString(),
       durationMs: finishedAt.getTime() - startedAt.getTime(),
+      request: { method: cfg.method, url: cfg.url, body: cfg.body },
+      response: lastResponse,
       error: lastErr instanceof Error ? lastErr.message : String(lastErr),
     };
   },

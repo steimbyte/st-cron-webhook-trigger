@@ -36,10 +36,14 @@ coverage/
 # Runtime
 .cronboard/
 cronboard.pid
-node_modules
+
+# Local test data dirs (created by scripts/*.ps1 smoke runs)
 .demo-data/
-.smoke-quick/
+.daisy-data/
+.smock-quick/
+.smock/
 .smoke/
+.smoke-quick/
 *.log
 core-tc.log
 cron-test.log
@@ -50,9 +54,28 @@ daemon-smoke.out.log
 detach-out.log
 detach-err.log
 detach-test.log
+daisy-start.log
+daisy-smoke.log
 smoke.log
 smoke-quick.log
 start.log
 typecheck.log
 typecheck-web.log
 web-build.log
+daisy.err.log
+daisy.out.log
+
+# Throwaway scripts (created during cronParser / icon rename work)
+scripts/*-*.cjs
+scripts/drop-*.cjs
+scripts/inspect-*.cjs
+scripts/dump-*.cjs
+scripts/fix-*.cjs
+scripts/patch-*.cjs
+scripts/append-*.cjs
+scripts/cleanup-*.cjs
+scripts/verify-*.ps1
+scripts/verify-*.mts
+scripts/test-1min.ps1
+scripts/smoke-daisy.ps1
+scripts/start-daisy.ps1

@@ -1,6 +1,6 @@
 {
   "name": "cronboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first cron scheduler with a Radix UI web frontend. Run, edit and monitor cron jobs visually — trigger webhooks, run shell commands, log runs.",
   "private": true,
   "type": "module",
@@ -38,8 +38,11 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
     "concurrently": "^8.2.2",
+    "daisyui": "^5.6.6",
     "prettier": "^3.2.5",
+    "tailwindcss": "^4.3.2",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5"
   }

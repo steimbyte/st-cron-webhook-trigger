@@ -1,21 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  Card,
-  Flex,
-  Heading,
-  Text,
-  Table,
-  Badge,
-  Dialog,
-  Tabs,
-  Button,
-  Select,
-  Box,
-  Separator,
-} from "@radix-ui/themes";
+import { ActivityLogIcon as ActivityLogIcon } from "@radix-ui/react-icons";
 import { api } from "../lib/api";
 import type { Run, RunStatus } from "../types";
-import { GlassCard } from "../components/GlassCard";
+import { RunBadge } from "./Dashboard";
 
 const STATUSES: ("all" | RunStatus)[] = ["all", "success", "partial", "failed", "timeout", "running"];
 
@@ -34,141 +21,115 @@ export default function RunsPage() {
   const filtered = runs?.filter((r) => filter === "all" || r.status === filter);
 
   return (
-    <Flex direction="column" gap="4">
-      <GlassCard>
-        <Flex align="center" gap="3">
-          <Heading size="3">All runs</Heading>
-          <Select.Root value={filter} onValueChange={(v) => setFilter(v as any)}>
-            <Select.Trigger />
-            <Select.Content>
-              {STATUSES.map((s) => (
-                <Select.Item key={s} value={s}>{s}</Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-          <Text size="2" color="gray" style={{ marginLeft: "auto" }}>
-            {runs === null ? "…" : `${filtered?.length ?? 0} of ${runs.length}`}
-          </Text>
-        </Flex>
-      </GlassCard>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold">Run history</h1>
+          <p className="text-sm text-base-content/60">Latest executions across all jobs.</p>
+        </div>
+      </div>
 
-      <GlassCard>
+      <div className="card bg-base-200/60 border border-base-300/60">
+        <div className="card-body p-4 flex flex-row items-center gap-3">
+          <select
+            className="select select-bordered select-sm bg-base-100/60"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as any)}
+          >
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>Filter: {s}</option>
+            ))}
+          </select>
+          <span className="text-xs text-base-content/50 ml-auto">
+            {runs === null ? "loading…" : `${filtered?.length ?? 0} of ${runs.length}`}
+          </span>
+        </div>
+      </div>
+
+      <div className="card bg-base-200/60 border border-base-300/60 overflow-hidden">
         {runs === null ? (
-          <Text size="2" color="gray">loading…</Text>
+          <div className="p-12 text-center text-base-content/50">
+            <span className="loading loading-spinner loading-md" />
+          </div>
         ) : (filtered ?? []).length === 0 ? (
-          <Flex direction="column" align="center" p="6" gap="2">
-            <Text size="2" color="gray">No runs yet.</Text>
-            <Text size="1" color="gray">Trigger a job manually or wait for its scheduled tick.</Text>
-          </Flex>
+          <div className="p-12 text-center">
+            <ActivityLogIcon className="w-12 h-12 text-base-content/20 mx-auto mb-3" />
+            <p className="text-base-content/50 mb-1">No runs yet.</p>
+            <p className="text-xs text-base-content/40">Trigger a job manually or wait for its scheduled tick.</p>
+          </div>
         ) : (
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Job</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Trigger</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Started</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {(filtered ?? []).map((r) => (
-                <Table.Row key={r.id}>
-                  <Table.Cell>
-                    <RunStatusBadge status={r.status} />
-                  </Table.Cell>
-                  <Table.Cell>{r.jobName}</Table.Cell>
-                  <Table.Cell><Badge variant="soft" color="gray">{r.trigger}</Badge></Table.Cell>
-                  <Table.Cell><Text size="1">{new Date(r.startedAt).toLocaleString()}</Text></Table.Cell>
-                  <Table.Cell><Text size="1">{r.durationMs ? `${r.durationMs}ms` : "—"}</Text></Table.Cell>
-                  <Table.Cell>
-                    <Button size="1" variant="soft" onClick={() => setOpenRun(r)}>Details</Button>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
+          <div className="overflow-x-auto">
+            <table className="table table-sm">
+              <thead>
+                <tr className="text-xs uppercase text-base-content/50 bg-base-300/30">
+                  <th>Status</th>
+                  <th>Job</th>
+                  <th>Trigger</th>
+                  <th>Started</th>
+                  <th className="text-right">Duration</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(filtered ?? []).map((r) => (
+                  <tr key={r.id} className="hover">
+                    <td><RunBadge status={r.status} /></td>
+                    <td className="font-medium">{r.jobName}</td>
+                    <td><span className="badge badge-ghost badge-sm">{r.trigger}</span></td>
+                    <td className="text-xs text-base-content/60">{new Date(r.startedAt).toLocaleString()}</td>
+                    <td className="text-right text-xs font-mono">{r.durationMs ? `${r.durationMs}ms` : "—"}</td>
+                    <td>
+                      <button className="btn btn-ghost btn-xs" onClick={() => setOpenRun(r)}>Details</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </GlassCard>
+      </div>
 
-      <Dialog.Root open={!!openRun} onOpenChange={(o) => !o && setOpenRun(null)}>
+      <dialog open={!!openRun} className="modal">
         {openRun ? (
-          <Dialog.Content style={{ maxWidth: 720 }}>
-            <Dialog.Title>{openRun.jobName} — run</Dialog.Title>
-            <Dialog.Description>{openRun.trigger} · {new Date(openRun.startedAt).toLocaleString()}</Dialog.Description>
-            <Box mt="4">
-              <RunDetail run={openRun} />
-            </Box>
-            <Flex justify="end" mt="4">
-              <Dialog.Close>
-                <Button variant="soft">Close</Button>
-              </Dialog.Close>
-            </Flex>
-          </Dialog.Content>
+          <div className="modal-box max-w-3xl bg-base-200 border border-base-300/60">
+            <h3 className="text-lg font-semibold">{openRun.jobName}</h3>
+            <p className="text-sm text-base-content/60 mt-1">
+              {openRun.trigger} · {new Date(openRun.startedAt).toLocaleString()} · {openRun.durationMs ?? "—"} ms
+            </p>
+            {openRun.error ? (
+              <div role="alert" className="alert alert-error mt-3">
+                <span className="text-sm">{openRun.error}</span>
+              </div>
+            ) : null}
+            <div className="mt-4 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {openRun.actionRuns.map((ar, i) => (
+                <div key={ar.id} className="card bg-base-100/60 border border-base-300/40">
+                  <div className="card-body p-4">
+                    <div role="tablist" className="tabs tabs-bordered">
+                      <a role="tab" className="tab tab-active text-xs">Request</a>
+                      <a role="tab" className="tab text-xs">Response</a>
+                      {ar.error ? <a role="tab" className="tab text-xs text-error">Error</a> : null}
+                    </div>
+                    <div className="mt-3">
+                      <pre className="cb-code">{JSON.stringify(ar.request ?? {}, null, 2)}</pre>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3 text-xs">
+                      <span className={`badge badge-sm ${ar.status === "success" ? "badge-success" : "badge-error"}`}>
+                        {ar.status}
+                      </span>
+                      <span className="text-base-content/60">action #{i + 1}</span>
+                      <span className="text-base-content/40 ml-auto">{ar.durationMs ?? "—"} ms</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-action">
+              <button className="btn btn-ghost" onClick={() => setOpenRun(null)}>Close</button>
+            </div>
+          </div>
         ) : null}
-      </Dialog.Root>
-    </Flex>
-  );
-}
-
-function RunStatusBadge({ status }: { status: RunStatus }) {
-  const color =
-    status === "success" ? "green" :
-    status === "failed" ? "red" :
-    status === "partial" ? "amber" :
-    status === "timeout" ? "orange" : "blue";
-  return <Badge color={color}>{status}</Badge>;
-}
-
-function RunDetail({ run }: { run: Run }) {
-  return (
-    <Flex direction="column" gap="3">
-      <Card>
-        <Flex align="center" gap="3">
-          <RunStatusBadge status={run.status} />
-          <Text size="2">started {new Date(run.startedAt).toLocaleString()}</Text>
-          <Text size="2" color="gray">·</Text>
-          <Text size="2">{run.durationMs ?? "—"} ms</Text>
-          {run.error ? (
-            <>
-              <Text size="2" color="gray">·</Text>
-              <Text size="2" color="red">{run.error}</Text>
-            </>
-          ) : null}
-        </Flex>
-      </Card>
-
-      {run.actionRuns.map((ar, i) => (
-        <Card key={ar.id}>
-          <Tabs.Root defaultValue="req">
-            <Tabs.List>
-              <Tabs.Trigger value="req">Request</Tabs.Trigger>
-              <Tabs.Trigger value="res">Response</Tabs.Trigger>
-              {ar.error ? <Tabs.Trigger value="err">Error</Tabs.Trigger> : null}
-            </Tabs.List>
-            <Box pt="3">
-              <Tabs.Content value="req">
-                <pre className="cb-code">{JSON.stringify(ar.request ?? {}, null, 2)}</pre>
-              </Tabs.Content>
-              <Tabs.Content value="res">
-                <pre className="cb-code">{JSON.stringify(ar.response ?? {}, null, 2)}</pre>
-              </Tabs.Content>
-              {ar.error ? (
-                <Tabs.Content value="err">
-                  <pre className="cb-code">{ar.error}</pre>
-                </Tabs.Content>
-              ) : null}
-            </Box>
-            <Separator size="4" />
-            <Flex align="center" gap="2" mt="2">
-              <Badge color={ar.status === "success" ? "green" : "red"}>{ar.status}</Badge>
-              <Text size="1" color="gray">action #{i + 1}</Text>
-              <Text size="1" color="gray" style={{ marginLeft: "auto" }}>{ar.durationMs ?? "—"} ms</Text>
-            </Flex>
-          </Tabs.Root>
-        </Card>
-      ))}
-    </Flex>
+      </dialog>
+    </div>
   );
 }
