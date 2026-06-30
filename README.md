@@ -49,10 +49,13 @@ Same pattern works for any web-accessible automation: n8n, Pipedream triggers, y
 
 ---
 
-## 📸 UI Preview (text-mode)
+## 📸 Dashboard
 
-```
-+---------------------------------------------+
+![Cronboard dashboard — Gruvbox dark theme with KPI cards (active jobs, runs/24h, failures, success rate), upcoming runs list, and recent-runs table](./docs/screenshots/dashboard.png)
+
+*Captured from a live `v0.3.0` instance: 1 active job (`Test` at `*/1 * * * *`), 50 successful runs in the last 24h, 0 failures, 100% success rate over 50 runs.*
+
+---------------------------------------------+
 | Cronboard                       [edit]      |
 |-----------------------------------------------|
 | Active jobs  | Runs (24h)  | Failures | SR   |
