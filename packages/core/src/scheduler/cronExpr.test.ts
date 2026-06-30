@@ -22,6 +22,10 @@ import {
   clampInterval,
   MINUTE_INTERVAL_OPTIONS,
   HOUR_INTERVAL_OPTIONS,
+  weekdayInTimezone,
+  dayOfMonthInTimezone,
+  datesForWeekdaysInMonth,
+  dateForDayOfMonth,
   type CronExpressionState,
 } from "./cronExpr.js";
 
@@ -276,5 +280,111 @@ describe("option lists are non-empty and ascending", () => {
     for (let i = 1; i < HOUR_INTERVAL_OPTIONS.length; i++) {
       assert.ok(HOUR_INTERVAL_OPTIONS[i] > HOUR_INTERVAL_OPTIONS[i - 1]);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Visual Calendar helpers (used by CronBuilder Weekly + Monthly tabs).
+// Timezone-aware: the daemon may run in UTC while the user picks a
+// schedule in Europe/Berlin — `Intl.DateTimeFormat({ timeZone })` ensures
+// we always report the user's local weekday / day-of-month.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("weekdayInTimezone", () => {
+  it("2026-06-15 (Mon) in Europe/Berlin → 1", () => {
+    assert.equal(weekdayInTimezone(new Date("2026-06-15T12:00:00Z"), "Europe/Berlin"), 1);
+  });
+
+  it("2026-06-20 (Sat) in Europe/Berlin → 6", () => {
+    assert.equal(weekdayInTimezone(new Date("2026-06-20T12:00:00Z"), "Europe/Berlin"), 6);
+  });
+
+  it("2026-06-21 (Sun) in UTC → 0", () => {
+    assert.equal(weekdayInTimezone(new Date("2026-06-21T12:00:00Z"), "UTC"), 0);
+  });
+
+  it("early-morning UTC date resolves to the user's previous day in negative-offset TZs", () => {
+    // 2026-06-15T01:00:00Z = 2026-06-14 20:00 in America/New_York (Sun evening)
+    assert.equal(weekdayInTimezone(new Date("2026-06-15T01:00:00Z"), "America/New_York"), 0);
+  });
+});
+
+describe("dayOfMonthInTimezone", () => {
+  it("first of month", () => {
+    assert.equal(dayOfMonthInTimezone(new Date("2026-06-01T12:00:00Z"), "UTC"), 1);
+  });
+
+  it("last of month", () => {
+    assert.equal(dayOfMonthInTimezone(new Date("2026-06-30T23:00:00Z"), "UTC"), 30);
+  });
+
+  it("timezone boundary: 2026-06-30T22:00:00Z is still June 30 in UTC but already July 1 in Europe/Berlin", () => {
+    assert.equal(dayOfMonthInTimezone(new Date("2026-06-30T22:00:00Z"), "UTC"), 30);
+    assert.equal(dayOfMonthInTimezone(new Date("2026-06-30T22:00:00Z"), "Europe/Berlin"), 1);
+  });
+});
+
+describe("datesForWeekdaysInMonth", () => {
+  it("returns [] for empty weekdays", () => {
+    assert.deepEqual(datesForWeekdaysInMonth([], new Date("2026-06-15"), "UTC"), []);
+  });
+
+  it("returns [] for weekdays outside 0..6", () => {
+    assert.deepEqual(
+      datesForWeekdaysInMonth([-1, 7, 99], new Date("2026-06-15"), "UTC"),
+      [],
+    );
+  });
+
+  it("Mon-Fri in June 2026 (Europe/Berlin) → 22 weekday dates", () => {
+    const dates = datesForWeekdaysInMonth(
+      [1, 2, 3, 4, 5],
+      new Date("2026-06-15T12:00:00Z"),
+      "Europe/Berlin",
+    );
+    assert.equal(dates.length, 22); // 4 weeks * 5 weekdays + 2 extra in last partial week
+    assert.equal(dates[0].toISOString().slice(0, 10), "2026-06-01");
+    assert.equal(dates[1].toISOString().slice(0, 10), "2026-06-02");
+    assert.equal(dates[2].toISOString().slice(0, 10), "2026-06-03");
+    assert.equal(dates[dates.length - 1].toISOString().slice(0, 10), "2026-06-30");
+  });
+
+  it("Saturdays only in June 2026 → 4 dates", () => {
+    const dates = datesForWeekdaysInMonth([6], new Date("2026-06-15T12:00:00Z"), "UTC");
+    assert.equal(dates.length, 4);
+    for (const d of dates) {
+      assert.equal(weekdayInTimezone(d, "UTC"), 6);
+    }
+  });
+
+  it("DST boundary: March 2026 (Europe/Berlin) returns correct count despite spring-forward", () => {
+    const dates = datesForWeekdaysInMonth(
+      [1, 2, 3, 4, 5],
+      new Date("2026-03-15T12:00:00Z"),
+      "Europe/Berlin",
+    );
+    assert.equal(dates.length, 22);
+  });
+});
+
+describe("dateForDayOfMonth", () => {
+  it("clamps day=31 to last day of February 2026 (28)", () => {
+    const d = dateForDayOfMonth(31, new Date("2026-02-15T12:00:00Z"), "UTC");
+    assert.equal(d.toISOString().slice(0, 10), "2026-02-28");
+  });
+
+  it("clamps day=31 to last day of April 2026 (30)", () => {
+    const d = dateForDayOfMonth(31, new Date("2026-04-15T12:00:00Z"), "UTC");
+    assert.equal(d.toISOString().slice(0, 10), "2026-04-30");
+  });
+
+  it("preserves day when it fits (June 15)", () => {
+    const d = dateForDayOfMonth(15, new Date("2026-06-01T12:00:00Z"), "UTC");
+    assert.equal(d.toISOString().slice(0, 10), "2026-06-15");
+  });
+
+  it("clamps day=0 (out of range) to 1", () => {
+    const d = dateForDayOfMonth(0, new Date("2026-06-15T12:00:00Z"), "UTC");
+    assert.equal(d.toISOString().slice(0, 10), "2026-06-01");
   });
 });

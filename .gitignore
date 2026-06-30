@@ -36,3 +36,23 @@ coverage/
 # Runtime
 .cronboard/
 cronboard.pid
+node_modules
+.demo-data/
+.smoke-quick/
+.smoke/
+*.log
+core-tc.log
+cron-test.log
+daemon.err.log
+daemon.out.log
+daemon-smoke.err.log
+daemon-smoke.out.log
+detach-out.log
+detach-err.log
+detach-test.log
+smoke.log
+smoke-quick.log
+start.log
+typecheck.log
+typecheck-web.log
+web-build.log

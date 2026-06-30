@@ -41,6 +41,9 @@ import {
   defaultCronState,
   MINUTE_INTERVAL_OPTIONS,
   HOUR_INTERVAL_OPTIONS,
+  weekdayInTimezone,
+  datesForWeekdaysInMonth,
+  dateForDayOfMonth,
   type CronExpressionState,
 } from "@cronboard/core/scheduler/cronExpr";
 
@@ -149,78 +152,59 @@ export default function CronBuilder({ value, onChange, timezone }: Props) {
           )}
 
           {state.kind === "week" && (
-            <Flex direction="column" gap="2">
-              <Flex gap="2" align="center" wrap="wrap">
-                <Text size="2" color="gray">On days</Text>
-                {DAY_LABELS.map((label, i) => {
-                  const active = state.days.includes(i);
-                  return (
-                    <Button
-                      key={i}
-                      size="2"
-                      variant={active ? "solid" : "soft"}
-                      color={active ? undefined : "gray"}
-                      onClick={() => {
-                        const days = active
-                          ? state.days.filter((d) => d !== i)
-                          : [...state.days, i].sort((a, b) => a - b);
-                        update("days", days);
-                      }}
-                      aria-pressed={active}
-                      aria-label={label}
-                    >
-                      {label}
-                    </Button>
-                  );
-                })}
-              </Flex>
-              <Text size="1" color="gray">
-                Tap a day to toggle. The Weekly tab also exposes a Calendar below for picking a reference date.
-              </Text>
-              <Flex gap="2" align="center" wrap="wrap">
-                <Text size="2" color="gray">Reference date:</Text>
-                <Calendar
-                  value={null}
-                  onChange={() => {
-                    /* Calendar here is informational; weekday selection above is the source of truth. */
-                  }}
-                  label="Pick a reference date"
-                  timezone={timezone}
-                />
-              </Flex>
-            </Flex>
-          )}
+  <Flex direction="column" gap="2">
+    <Flex gap="2" align="center" wrap="wrap">
+      <Text size="2" color="gray">Tap a date to toggle its weekday.</Text>
+    </Flex>
+    <Calendar
+      mode="multiple"
+      multiValue={datesForWeekdaysInMonth(state.days, new Date(), timezone)}
+      onMultiChange={(dates) => {
+        const weekdays = [
+          ...new Set(dates.map((d) => weekdayInTimezone(d, timezone))),
+        ].sort((a, b) => a - b);
+        update("days", weekdays);
+      }}
+      triggerLabel="Pick weekdays"
+      timezone={timezone}
+    />
+    <Flex gap="2" align="center" wrap="wrap">
+      <Text size="1" color="gray">Active:</Text>
+      {state.days.length === 0 ? (
+        <Text size="1" color="gray">no weekdays selected (will run daily)</Text>
+      ) : (
+        state.days.map((d) => (
+          <Badge key={d} color="violet" variant="soft">{DAY_LABELS[d]}</Badge>
+        ))
+      )}
+    </Flex>
+  </Flex>
+)}{state.kind === "month" && (
+  <Flex direction="column" gap="2">
+    <Flex gap="2" align="center" wrap="wrap">
+      <Text size="2" color="gray">Pick a date — its day-of-month becomes the trigger day.</Text>
+    </Flex>
+    <Calendar
+      value={dateForDayOfMonth(state.dayOfMonth, new Date(), timezone)}
+      onChange={(d) => {
+        if (!d) return;
+        const parts = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          day: "numeric",
+        }).formatToParts(d);
+        const dayPart = parts.find((p) => p.type === "day")?.value ?? "1";
+        update("dayOfMonth", parseInt(dayPart, 10));
+      }}
+      triggerLabel={`Day ${state.dayOfMonth}`}
+      timezone={timezone}
+    />
+    <Flex gap="2" align="center" wrap="wrap">
+      <Text size="1" color="gray">Active day-of-month:</Text>
+      <Badge color="violet" variant="soft">{state.dayOfMonth}</Badge>
+    </Flex>
+  </Flex>
+)}
 
-          {state.kind === "month" && (
-            <Flex direction="column" gap="2">
-              <Flex gap="3" align="center" wrap="wrap">
-                <Text size="2">On day</Text>
-                <Select.Root
-                  value={String(state.dayOfMonth)}
-                  onValueChange={(v) => update("dayOfMonth", parseInt(v, 10))}
-                >
-                  <Select.Trigger style={{ width: 100 }} />
-                  <Select.Content>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                      <Select.Item key={d} value={String(d)}>{d}</Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-                <Text size="2" color="gray">of the month.</Text>
-              </Flex>
-              <Flex gap="2" align="center" wrap="wrap">
-                <Text size="2" color="gray">Calendar (informational):</Text>
-                <Calendar
-                  value={null}
-                  onChange={() => {
-                    /* Calendar here is informational; day-of-month above is the source of truth. */
-                  }}
-                  label="Pick a day of the month"
-                  timezone={timezone}
-                />
-              </Flex>
-            </Flex>
-          )}
 
           {state.kind === "custom" && (
             <Flex direction="column" gap="2">

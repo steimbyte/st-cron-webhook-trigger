@@ -211,3 +211,107 @@ export function cronRoundTrip(expr: string): string | null {
   const merged: CronExpressionState = { ...defaultCronState(), ...parsed } as CronExpressionState;
   return buildCron(merged);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Date helpers used by the visual Calendar in CronBuilder (Weekly + Monthly
+// tabs). All helpers are timezone-aware via Intl.DateTimeFormat so a job
+// scheduled in Europe/Berlin picks the right weekday / day-of-month for the
+// user, not for the server.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEKDAY_SHORT_MAP: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+/**
+ * Return the weekday (0=Sun..6=Sat) of the given Date *interpreted in the
+ * given IANA timezone*. Without `timezone`, the server's local timezone
+ * would be used, which is wrong if the user is in a different tz than the
+ * daemon.
+ */
+export function weekdayInTimezone(d: Date, timezone: string): number {
+  const text = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+  }).format(d);
+  return WEEKDAY_SHORT_MAP[text] ?? 0;
+}
+
+/**
+ * Return the day-of-month (1..31) of the given Date *interpreted in the
+ * given IANA timezone*. Same reasoning as `weekdayInTimezone`.
+ */
+export function dayOfMonthInTimezone(d: Date, timezone: string): number {
+  const text = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    day: "numeric",
+  }).format(d);
+  const n = parseInt(text, 10);
+  return Number.isFinite(n) ? n : 1;
+}
+
+/**
+ * Return the (year, month 1-12) of `d` interpreted in `timezone`.
+ */
+function yearMonthInTimezone(d: Date, timezone: string): { year: number; month: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(d);
+  const year = parseInt(parts.find((p) => p.type === "year")?.value ?? "1970", 10);
+  const month = parseInt(parts.find((p) => p.type === "month")?.value ?? "1", 10);
+  return { year, month };
+}
+
+/**
+ * Return every Date in the calendar month containing `month` whose weekday
+ * (in `timezone`) is in the `weekdays` list. Each returned Date is anchored
+ * at noon UTC on the corresponding calendar day so DST boundaries cannot
+ * push it into the previous or next day.
+ *
+ * `weekdays` uses 0=Sun..6=Sat to match the rest of this module.
+ *
+ * Examples (in `Europe/Berlin`):
+ *   datesForWeekdaysInMonth([1, 2, 3, 4, 5], new Date("2026-06-15"), "Europe/Berlin")
+ *     → [Date for Mon 1 Jun, Tue 2 Jun, Wed 3 Jun, Thu 4 Jun, Fri 5 Jun,
+ *        Mon 8 Jun, Tue 9 Jun, Wed 10 Jun, Thu 11 Jun, Fri 12 Jun,
+ *        Mon 15 Jun, Tue 16 Jun, Wed 17 Jun, Thu 18 Jun, Fri 19 Jun,
+ *        Mon 22 Jun, Tue 23 Jun, Wed 24 Jun, Thu 25 Jun, Fri 26 Jun,
+ *        Mon 29 Jun, Tue 30 Jun]
+ */
+export function datesForWeekdaysInMonth(
+  weekdays: number[],
+  month: Date,
+  timezone: string,
+): Date[] {
+  if (weekdays.length === 0) return [];
+  const wanted = new Set(weekdays.filter((w) => Number.isFinite(w) && w >= 0 && w <= 6));
+  if (wanted.size === 0) return [];
+
+  const { year, month: m } = yearMonthInTimezone(month, timezone);
+  // Last day of the month: day 0 of the next month in UTC.
+  const daysInMonth = new Date(Date.UTC(year, m, 0)).getUTCDate();
+
+  const out: Date[] = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    // Anchor at noon UTC to stay clear of DST edges in any timezone.
+    const candidate = new Date(Date.UTC(year, m - 1, d, 12));
+    const wd = weekdayInTimezone(candidate, timezone);
+    if (wanted.has(wd)) out.push(candidate);
+  }
+  return out;
+}
+
+/**
+ * Convenience: build a Date that, when interpreted in `timezone`, falls on
+ * day-of-month `day` of the month containing `reference`. Returns the first
+ * valid occurrence (capped to the last day of the month, so day=31 in
+ * February returns Feb 28/29).
+ */
+export function dateForDayOfMonth(day: number, reference: Date, timezone: string): Date {
+  const { year, month } = yearMonthInTimezone(reference, timezone);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const safeDay = clamp(day, 1, daysInMonth);
+  return new Date(Date.UTC(year, month - 1, safeDay, 12));
+}

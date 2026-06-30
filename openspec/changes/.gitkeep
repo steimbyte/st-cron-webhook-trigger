@@ -1,0 +1,10 @@
+# `changes/` is empty while no change is open.
+
+A new SDD change drops its artifacts into a fresh directory here, e.g.
+`openspec/changes/<change-id>/`. When the change is verified and approved,
+`sdd-archive` moves the directory (with all its files) into
+`openspec/changes/archive/<change-id>/` — see the `archive/README.md` index.
+
+History so far (newest first):
+- (none in flight)
+- Archived: see `archive/`

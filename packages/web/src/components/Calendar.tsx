@@ -2,25 +2,23 @@
 // `@radix-ui/react-popover` so the trigger button is the anchor and the
 // grid opens in a focus-trapped, dismissable layer.
 //
-// The component is timezone-aware via an IANA `timezone` prop; the trigger
-// label uses `formatInTimeZone` so the same Date renders consistently
-// regardless of the user's browser locale. The picked Date is always a
-// native `Date` — the caller (CronBuilder) is responsible for any
-// timezone-aware math.
+// Supports two modes:
+//   - "single": pick one date; emits Date | null via onChange.
+//   - "multiple": pick N dates (used by the Weekly tab to toggle weekdays
+//     by clicking dates); emits Date[] | [] via onMultiChange.
+//
+// All timezone-aware logic lives in `@cronboard/core/scheduler/cronExpr`
+// (`weekdayInTimezone`, `dayOfMonthInTimezone`); this component just
+// renders the picker and forwards clicks.
 
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, type DayPickerProps } from "react-day-picker";
 import "react-day-picker/style.css";
 
 import { Box, Button, Flex, Text, IconButton } from "@radix-ui/themes";
 import { CalendarIcon, Cross2Icon } from "@radix-ui/react-icons";
 
-/**
- * Format a date in the given IANA timezone using `Intl.DateTimeFormat` so we
- * don't need `date-fns-tz` (or v4's `formatInTimeZone`). The result mirrors
- * "EEE d MMM yyyy" — e.g. "Mon 2 Jun 2026".
- */
 function formatInTimeZoneIntl(d: Date, tz: string): string {
   try {
     return new Intl.DateTimeFormat("en-GB", {
@@ -35,47 +33,98 @@ function formatInTimeZoneIntl(d: Date, tz: string): string {
   }
 }
 
-export interface CalendarProps {
-  /** Selected date in the user's timezone. `null` means "not yet picked". */
-  value: Date | null;
-  /** Fired with a Date when the user picks (or clears) a date. */
-  onChange: (date: Date | null) => void;
-  /** Earliest selectable date (inclusive). Optional. */
+export type CalendarMode = "single" | "multiple";
+
+interface CommonProps {
   minDate?: Date;
-  /** Latest selectable date (inclusive). Optional. */
   maxDate?: Date;
-  /** Trigger button label override. */
-  label?: string;
-  /** IANA timezone for the trigger label. Defaults to browser. */
+  triggerLabel?: string;
   timezone?: string;
-  /** Optional date used as the "initial month" when value is null. */
   defaultMonth?: Date;
+  disabled?: boolean;
 }
 
-export function Calendar({
-  value,
-  onChange,
-  minDate,
-  maxDate,
-  label,
-  timezone,
-  defaultMonth,
-}: CalendarProps) {
+export interface CalendarSingleProps extends CommonProps {
+  mode?: "single";
+  value: Date | null;
+  onChange: (date: Date | null) => void;
+}
+
+export interface CalendarMultipleProps extends CommonProps {
+  mode: "multiple";
+  multiValue: Date[];
+  onMultiChange: (dates: Date[]) => void;
+}
+
+export type CalendarProps = CalendarSingleProps | CalendarMultipleProps;
+
+export function Calendar(props: CalendarProps) {
+  const tz =
+    props.timezone ||
+    (typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : "UTC");
+  const isMulti = props.mode === "multiple";
+
   const [open, setOpen] = useState(false);
 
-  const tz = timezone || (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC");
-  const displayValue = value
-    ? formatInTimeZoneIntl(value, tz)
-    : (label ?? "Pick a date");
+  let displayValue: string;
+  if (isMulti) {
+    const n = props.multiValue.length;
+    displayValue = n === 0
+      ? (props.triggerLabel ?? "Pick dates")
+      : `${n} date${n === 1 ? "" : "s"} selected`;
+  } else {
+    displayValue = props.value
+      ? formatInTimeZoneIntl(props.value, tz)
+      : (props.triggerLabel ?? "Pick a date");
+  }
+
+  // DayPicker's discriminated props: in multi-mode `selected` is required and
+  // typed Date[]; in single-mode it's optional Date. We branch the props so TS
+  // narrows correctly without an `any` cast.
+  const isDisabled = (d: Date): boolean => {
+    if (props.minDate && d < props.minDate) return true;
+    if (props.maxDate && d > props.maxDate) return true;
+    return false;
+  };
+
+  const dayPickerProps: DayPickerProps =
+    props.mode === "multiple"
+      ? {
+          mode: "multiple" as const,
+          selected: props.multiValue,
+          required: false,
+          onSelect: (d: Date[] | undefined) => {
+            props.onMultiChange(d ?? []);
+          },
+          showOutsideDays: true,
+          weekStartsOn: 1,
+          disabled: isDisabled,
+          defaultMonth: props.defaultMonth ?? new Date(),
+        }
+      : {
+          mode: "single" as const,
+          selected: props.value ?? undefined,
+          onSelect: (d: Date | undefined) => {
+            props.onChange(d ?? null);
+            setOpen(false);
+          },
+          showOutsideDays: true,
+          weekStartsOn: 1,
+          disabled: isDisabled,
+          defaultMonth: props.defaultMonth ?? props.value ?? new Date(),
+        };
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <Button
           variant="soft"
-          color={value ? undefined : "gray"}
-          aria-label={label ?? "Pick a date"}
+          color={(isMulti ? props.multiValue.length > 0 : !!props.value) ? undefined : "gray"}
+          aria-label={props.triggerLabel ?? (isMulti ? "Pick dates" : "Pick a date")}
           aria-haspopup="dialog"
+          disabled={props.disabled}
         >
           <Flex gap="2" align="center">
             <CalendarIcon />
@@ -84,49 +133,39 @@ export function Calendar({
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content
-          align="start"
-          sideOffset={4}
-          style={{ zIndex: 50 }}
-        >
+        <Popover.Content align="start" sideOffset={4} style={{ zIndex: 50 }}>
           <Box className="cb-glass-strong" p="3">
-            <DayPicker
-              mode="single"
-              selected={value ?? undefined}
-              onSelect={(d) => {
-                onChange(d ?? null);
-                setOpen(false);
-              }}
-              showOutsideDays
-              weekStartsOn={1}
-              disabled={(d) => {
-                if (minDate && d < minDate) return true;
-                if (maxDate && d > maxDate) return true;
-                return false;
-              }}
-              defaultMonth={defaultMonth ?? value ?? new Date()}
-            />
+            <DayPicker {...dayPickerProps} />
             <Flex justify="between" align="center" mt="2" gap="2">
               <Button
                 size="1"
                 variant="ghost"
                 color="gray"
                 onClick={() => {
-                  onChange(new Date());
-                  setOpen(false);
+                  if (props.mode === "multiple") {
+                    props.onMultiChange([new Date()]);
+                  } else {
+                    props.onChange(new Date());
+                    setOpen(false);
+                  }
                 }}
               >
                 Today
               </Button>
-              {value ? (
+              {((props.mode === "multiple" && props.multiValue.length > 0) ||
+                (props.mode !== "multiple" && props.value)) ? (
                 <IconButton
                   size="1"
                   variant="ghost"
                   color="gray"
-                  aria-label="Clear date"
+                  aria-label="Clear"
                   onClick={() => {
-                    onChange(null);
-                    setOpen(false);
+                    if (props.mode === "multiple") {
+                      props.onMultiChange([]);
+                    } else {
+                      props.onChange(null);
+                      setOpen(false);
+                    }
                   }}
                 >
                   <Cross2Icon />
