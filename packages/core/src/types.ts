@@ -9,6 +9,12 @@ export interface WebhookConfig {
   body?: string;
   timeoutMs?: number;
   retries?: { count: number; backoffMs: number };
+  /**
+   * v0.5.0 — Bypass the SSRF guard for this webhook action.
+   * Use only for trusted internal targets (e.g. chaining to your own API on 127.0.0.1).
+   * Default: false.
+   */
+  allowPrivateNetworks?: boolean;
 }
 
 export interface ShellConfig {

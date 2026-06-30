@@ -17,6 +17,7 @@ import { registerActionExecutor } from "./actions/registry.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { jobSchema } from "./schemas.js";
+import { sanitizeExecArgv } from "./security/execArgv.js";
 
 registerActionExecutor(webhookExec);
 registerActionExecutor(shellExec);
@@ -25,7 +26,7 @@ const program = new Command();
 program
   .name("cronboard")
   .description("Local-first cron scheduler with Radix UI web frontend")
-  .version("0.4.0");
+  .version("0.5.0");
 
 // ---------- start ----------
 program
@@ -38,8 +39,19 @@ program
   .option("--detach", "Run as background daemon", true)
   .option("--no-detach", "Run in foreground (for dev/debug)")
   .option("--no-scheduler", "Skip starting the scheduler (web UI only)")
+      .option(
+        "--allow-private-networks",
+        "Allow webhook targets on private networks (e.g. 127.0.0.1, 10.x). Sets CRONBOARD_ALLOW_PRIVATE_NETWORKS=1.",
+        false,
+      )
   .action(async (opts) => {
     const cfg = resolveConfig(opts);
+
+    // v0.5.0 — propagate --allow-private-networks into the env so the
+    // detached child (and the SSRF guard) see the same override.
+    if (opts.allowPrivateNetworks === true) {
+      process.env.CRONBOARD_ALLOW_PRIVATE_NETWORKS = "1";
+    }
 
     if (
       cfg.host !== "127.0.0.1" &&
@@ -59,7 +71,7 @@ program
       const err = fs.openSync(cfg.logFile, "a");
       const child = spawn(
         process.execPath,
-        [...process.execArgv, process.argv[1], ...process.argv.slice(2), "--no-detach"],
+        ["--import", "tsx/esm", ...sanitizeExecArgv(process.execArgv), process.argv[1], ...process.argv.slice(2), "--no-detach"],
         {
           detached: true,
           stdio: ["ignore", out, err],
@@ -99,7 +111,7 @@ program
     );
 
     // Server expects a "scheduler" handle for /api/jobs/:id/run
-    const deps: any = { jobs, runs, logger, token: cfg.token };
+    const deps: any = { jobs, runs, logger, token: cfg.token, host: cfg.host };
     const app = await buildServer(deps);
     deps.scheduler = scheduler;
 

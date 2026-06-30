@@ -11,7 +11,7 @@ schema: openspec/v1
 project:
   name: cronboard
   display_name: Cronboard
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     Local-first cron scheduler with a Radix Themes web frontend. Run, edit
     and monitor cron jobs visually — trigger webhooks, run shell commands,

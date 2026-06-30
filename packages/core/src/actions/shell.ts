@@ -59,6 +59,21 @@ const executor: ActionExecutor = {
             `cwd "${absCwd}" is outside allowed paths: ${cfg.allowedPaths.join(", ")}`,
           );
         }
+      } else {
+        // v0.5.0 — M3: warn when no allowedPaths is set and we are running in
+        // a privileged-user cwd (root, /home/<user>, C:\Users\<user>).
+        // The shell command has effective write access to that cwd.
+        const cwd = process.cwd();
+        const privilegedHome =
+          process.platform === "win32"
+            ? /^[A-Z]:\\Users\\[^\\]+/i
+            : /^(\/root|\/home\/[^\/]+)/;
+        if (privilegedHome.test(cwd)) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[cronboard] shell job ${a.jobId}: running in privileged cwd ${cwd} with no allowedPaths set. Consider setting allowedPaths to restrict impact.`,
+          );
+        }
       }
 
       const result = await runInPath(

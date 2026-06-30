@@ -12,6 +12,8 @@ export const webhookConfigSchema = z.object({
       backoffMs: z.number().int().positive().max(60_000),
     })
     .optional(),
+  // v0.5.0 — SSRF guard bypass for this single action.
+  allowPrivateNetworks: z.boolean().default(false),
 });
 
 export const shellConfigSchema = z.object({
@@ -44,7 +46,8 @@ export const jobSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
-  cronExpression: z.string().min(1),
+  // v0.5.0 — bound cron expressions to prevent abuse (e.g. multi-MB inputs).
+  cronExpression: z.string().min(1).max(256),
   timezone: z.string().default("UTC"),
   enabled: z.boolean().default(true),
   actions: z.array(actionSchema).default([]),

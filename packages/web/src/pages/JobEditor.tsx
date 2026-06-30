@@ -399,6 +399,25 @@ function WebhookFields({
           placeholder="https://example.com/webhook"
         />
       </label>
+      <div className="form-control md:col-span-3">
+        <label className="label cursor-pointer justify-start gap-2 py-1">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-xs"
+            checked={!!config.allowPrivateNetworks}
+            onChange={(e) => onChange({ ...config, allowPrivateNetworks: e.target.checked })}
+          />
+          <span className="label-text text-xs">
+            Allow private networks
+            <span className="ml-1 text-base-content/50">(SSRF guard bypass; only for trusted internal targets)</span>
+          </span>
+        </label>
+        {config.allowPrivateNetworks ? (
+          <p className="text-xs text-warning mt-1">
+            ⚠ SSRF protection disabled for this webhook. Use only for trusted internal targets (e.g. chaining back to your own API on 127.0.0.1).
+          </p>
+        ) : null}
+      </div>
       <label className="form-control md:col-span-3">
         <div className="label py-1"><span className="label-text text-xs uppercase text-base-content/50">Body</span></div>
         <textarea

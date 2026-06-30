@@ -11,6 +11,8 @@ export interface WebhookConfig {
   body?: string;
   timeoutMs?: number;
   retries?: { count: number; backoffMs: number };
+  /** v0.5.0 — Bypass SSRF guard for this webhook. Use only for trusted internal targets. */
+  allowPrivateNetworks?: boolean;
 }
 
 export interface ShellConfig {

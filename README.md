@@ -2,7 +2,7 @@
 
 A **local-first cron scheduler** with a **Gruvbox-themed web UI** for triggering webhooks, scripts, and shell commands on a schedule. Built as a single small Node.js process — no cloud account, no telemetry, your jobs and run history live in `~/.config/cronboard/`.
 
-> **Status:** v0.4.0 — correct chart statistics (empty-state handling, p50/p95/p99, per-job status strip).
+> **Status:** v0.5.0 — security hardening (SSRF guard for webhook targets, timing-safe bearer auth, secrets redaction, fastify 5.9 CVE patch).
 
 ---
 
@@ -201,13 +201,19 @@ All `/api/*` calls return JSON. When bound to non-localhost, an `Authorization: 
 
 ---
 
-## 🔐 Security
+## 🔐 Security model (v0.5.0)
 
 - **Default bind:** `127.0.0.1` — no auth needed for local-only use.
-- **`--host 0.0.0.0`** requires `--token`; bearer auth enforced on every `/api/*` call.
-- **Webhook actions** honour a per-action timeout (default 30 s) and optional retry/backoff strategy.
-- **Shell actions** honour a per-action timeout (default 60 s) and optional `allowedPaths` allowlist. UI shows a soft warning before adding a shell action.
+- **`--host 0.0.0.0`** requires `--token`; bearer auth enforced on every `/api/*` call. v0.5.0 also refuses to build a server bound to a non-loopback address without a token (defence in depth alongside the CLI check).
+- **SSRF guard (`assertPublicUrl`)** — every webhook target is validated before the request fires: scheme allow-list (http/https only), hostname pre-check (localhost, `.local`, `.internal`), IP-literal deny (RFC1918, loopback, link-local incl. AWS metadata `169.254.169.254`, multicast, IPv6 ULA + IPv4-mapped), and full DNS `A/AAAA` resolution against the same deny-list. HTTP redirects are disabled (`maxRedirections: 0`) so a 302 cannot pivot past the guard. Escape hatch: per-action `allowPrivateNetworks: true` (UI toggle) or global `--allow-private-networks` (sets `CRONBOARD_ALLOW_PRIVATE_NETWORKS=1`).
+- **Timing-safe bearer auth** — the `/api/*` auth hook compares tokens with `crypto.timingSafeEqual` after length-normalisation; the old `!==` comparison was a per-byte timing oracle.
+- **Secrets redaction (`stripJobSecrets`)** — `GET /api/jobs` and `GET /api/jobs/:id` mask `Authorization`, `x-api-key`, `Cookie`, `Set-Cookie`, `api-key`, `apikey` and friends (case-insensitive), and redact JSON / form-urlencoded request bodies in webhook actions. Shell commands stay plaintext (you wrote them, you can see them).
+- **execArgv sanitiser** — `--inspect*`, `--debug*`, `--heap-prof*`, `--cpu-prof*` are stripped before the daemon is spawned detached, so a dev-time `--inspect=0.0.0.0:9229` cannot pivot into the long-running server.
+- **CORS:** same-origin only (`origin: false`). Cross-origin requests receive no CORS headers; deploy behind a reverse proxy if you need multi-origin access.
+- **Startup migration warning (R1)** — on daemon start, jobs whose webhook targets a private network without `allowPrivateNetworks: true` are listed in `warn` log output. No automatic migration.
+- **Shell `allowedPaths`** — when non-empty, `cwd` must resolve inside one of the listed roots. v0.5.0 additionally warns at execution time when `allowedPaths` is empty and the cronboard process runs in a privileged-user cwd (`/root`, `/home/<user>`, `C:\Users\<user>`).
 - **No `npm publish`** — both packages are `private: true`.
+- **`npm audit`:** **0 HIGH/CRITICAL** after the `fastify@^5.9` upgrade (5 transitive CVEs in `fast-uri` / `fast-json-stringify` closed). One moderate `@fastify/static` directory-listing advisory remains; we serve a SPA build, never a user-controlled directory.
 
 ---
 
@@ -314,6 +320,7 @@ This codebase was **written predominantly by an AI coding assistant** (Pi, power
 - **CronBuilder rewrite** — modal-based schedule picker replacing the original tab UI; fixed the stale-`useMemo` bug where picking `*/1` silently reset to `*/5`.
 - **Webhook debugging improvement** — failure-path response/request capture.
 - **Hardening** — Windows-aware atomic writes, EPERM retry, scheduler re-entry guard, file-watcher debounce, signal-handling fallback for Windows.
+- **Security audit + v0.5.0 hardening** — full `security-reviewer` sweep across `packages/core/`; 4 High + 5 Medium + 2 Low findings closed. SSRF guard in `assertPublicUrl`, `crypto.timingSafeEqual` for token auth, secrets redaction (`stripJobSecrets`), `fastify@^5.9` upgrade (closes 5 transitive CVEs in `fast-uri` / `fast-json-stringify`), `execArgv` sanitiser, CORS `origin: false`, startup migration warning for private-target webhooks. See the [Security model](#-security-model-v050) section above.
 - **README, .gitignore, SDD artifacts** — generated documentation.
 
 The project owner reviewed, approved, and shipped every change. **All code is provided as-is**, with no warranty. Use at your own risk, especially for production cron jobs — always test schedules manually before relying on them for critical workloads.
