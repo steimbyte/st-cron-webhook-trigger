@@ -1,6 +1,6 @@
 {
   "name": "cronboard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first cron scheduler with a Radix UI web frontend. Run, edit and monitor cron jobs visually — trigger webhooks, run shell commands, log runs.",
   "private": true,
   "type": "module",

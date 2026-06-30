@@ -11,7 +11,7 @@ schema: openspec/v1
 project:
   name: cronboard
   display_name: Cronboard
-  version: 0.1.0
+  version: 0.3.0
   description: >-
     Local-first cron scheduler with a Radix Themes web frontend. Run, edit
     and monitor cron jobs visually — trigger webhooks, run shell commands,
@@ -71,10 +71,10 @@ tech_stack:
     bundler: vite
     framework: react
     react_version: "18"
-    design_system: "@radix-ui/themes"
-    design_system_version: "3"
+    design_system: "DaisyUI 5"
+    design_system_layer: "tailwindcss 4"
     icons: "@radix-ui/react-icons"
-    router: react-router-dom
+    calendar: "react-day-picker"
     cron_human: cronstrue
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -171,11 +171,14 @@ rules:
     description: "engines.node >=20. Do not introduce Node 22-only syntax or 18-era polyfills."
     enforced_by: package.json
 
-  - id: radix-themes-only
+  - id: daisyui-only
     description: >-
-      Single design system: @radix-ui/themes v3 + @radix-ui/react-icons.
-      No Tailwind, no shadcn, no other utility-CSS framework, no parallel
-      component library. CSS lives in packages/web/src/styles.css.
+      Single UI / design system: DaisyUI 5 (on Tailwind 4) as the component
+      and theming layer. @radix-ui/react-icons is permitted as the sole icon
+      glyph source (DaisyUI has no equivalent icon component). No Radix
+      Themes, no shadcn, no Material/Chakra/Mantine, no parallel component
+      library. Utility CSS beyond Tailwind 4 + DaisyUI is forbidden. CSS
+      lives in packages/web/src/styles.css.
     enforced_by: code-review
 
   - id: local-first-default-bind

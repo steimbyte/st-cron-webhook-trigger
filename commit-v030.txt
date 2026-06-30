@@ -1,0 +1,12 @@
+chore(v0.3.0): remove unused UI-framework deps — DaisyUI only
+
+- Drop @radix-ui/themes, @radix-ui/react-popover, react-router-dom,
+  react-aria-components, date-fns from packages/web/package.json
+- Swap openspec/config.yaml rule from radix-themes-only to daisyui-only
+- Bump version 0.2.0 → 0.3.0 across all three package.json files,
+  cli.ts, server.ts, and config.yaml project.version
+- Include the Langflow URL / webhook-UUID redaction in README and
+  JobEditor.loadExample() (placeholder names, no real values)
+
+Bundle: gzipped JS expected to drop ~30–60 kB.
+Public API (CLI + HTTP) untouched.

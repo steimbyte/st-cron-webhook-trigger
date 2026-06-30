@@ -359,7 +359,7 @@ function WebhookFields({
 
   function loadExample() {
     setCurlInput(`curl -X POST \\
-  "https://langflow.steimercloud.xyz/api/v1/webhook/64071921-b716-4b4e-835d-cdf74279902d" \\
+  "https://<your-langflow-host.example>/api/v1/webhook/<your-webhook-id>" \\
   -H 'Content-Type: application/json' \\
   -H 'x-api-key: <your api key>' \\
   -d '{"any": "data"}'`);
