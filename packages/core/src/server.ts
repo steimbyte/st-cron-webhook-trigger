@@ -13,6 +13,12 @@ import { randomUUID } from "node:crypto";
 import cronstrue from "cronstrue";
 const cronstrueDescribe = (cronstrue as unknown as { toString: (e: string, o?: { locale?: string; tz?: string }) => string }).toString;
 import { Cron } from "croner";
+import {
+  successRate,
+  summarizeRunDurations,
+  runsByHour,
+  lastN,
+} from "./stats/aggregations.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,7 +50,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
 
   app.get("/api/health", async () => ({
     status: "ok",
-    version: "0.3.0",
+    version: "0.4.0",
     time: new Date().toISOString(),
   }));
 
@@ -136,6 +142,63 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
     const run = await deps.runs.get(id);
     if (!run) return reply.code(404).send({ error: "not found" });
     return run;
+  });
+
+  // ----- Aggregated stats (v0.4.0) -----
+  // Sliding 24h window. Server is the source of truth; the dashboard re-fetches
+  // every 30s rather than re-aggregating client-side.
+  app.get("/api/stats", async (req) => {
+    const q = z
+      .object({ tz: z.string().optional() })
+      .parse(req.query ?? {});
+    const tz = q.tz ?? "Etc/UTC";
+
+    const allRuns = await deps.runs.list({ limit: 1000 });
+    const jobs = await deps.jobs.list();
+    const now = Date.now();
+    const last24h = allRuns.filter(
+      (r) => now - new Date(r.startedAt).getTime() < 86_400_000,
+    );
+
+    const summary = summarizeRunDurations(last24h);
+    return {
+      activeJobs: jobs.filter((j) => j.enabled).length,
+      totalJobs: jobs.length,
+      runs24h: last24h.length,
+      failures24h: last24h.filter(
+        (r) => r.status === "failed" || r.status === "partial",
+      ).length,
+      successRate24h: successRate(last24h), // null on empty per D1
+      durationP50: summary.p50,
+      durationP95: summary.p95,
+      durationP99: summary.p99,
+      runsByHour: runsByHour(last24h, 24, tz, now), // length 24, index 0 = 23h ago
+    };
+  });
+
+  app.get("/api/jobs/:id/stats", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+      })
+      .parse(req.query ?? {});
+    const job = await deps.jobs.get(id);
+    if (!job) return reply.code(404).send({ error: "not found" });
+    const runs = await deps.runs.list({ jobId: id });
+    const now = Date.now();
+    const last24 = runs.filter(
+      (r) => now - new Date(r.startedAt).getTime() < 86_400_000,
+    );
+    const summary = summarizeRunDurations(last24);
+    return {
+      jobId: id,
+      successRate: successRate(last24),
+      p50: summary.p50,
+      p95: summary.p95,
+      p99: summary.p99,
+      last20: lastN(runs, q.limit), // most-recent `limit` runs (default 20, max 100)
+    };
   });
 
   // ----- Cron utility (for UI live-preview) -----

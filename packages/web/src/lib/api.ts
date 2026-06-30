@@ -1,5 +1,5 @@
 // Frontend API client. Uses fetch with same-origin.
-import type { Job, Run } from "../types";
+import type { Job, OverallStats, JobStats, Run } from "../types";
 
 const BASE = ""; // same origin (Vite dev proxies /api, prod served by core)
 
@@ -49,5 +49,15 @@ export const api = {
       if (tz) q.set("tz", tz);
       return request<{ ok: boolean; runs?: string[]; error?: string }>("GET", `/api/cron/next?${q}`);
     },
+  },
+  stats: {
+    // Server-side aggregations. tz defaults to "Etc/UTC" on the server
+    // when omitted; the dashboard passes its browser-TZ explicitly.
+    overall: (tz?: string) => {
+      const q = tz ? `?${new URLSearchParams({ tz })}` : "";
+      return request<OverallStats>("GET", `/api/stats${q}`);
+    },
+    job: (id: string, limit = 20) =>
+      request<JobStats>("GET", `/api/jobs/${id}/stats?limit=${limit}`),
   },
 };

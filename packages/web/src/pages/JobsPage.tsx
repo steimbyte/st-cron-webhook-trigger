@@ -8,15 +8,19 @@ import {
   TrashIcon as TrashIcon,
 } from "@radix-ui/react-icons";
 import { api } from "../lib/api";
-import type { Job } from "../types";
+import type { Job, JobStats, Run } from "../types";
 import { RunBadge } from "./Dashboard";
+import { StatusStrip } from "../components/StatusStrip";
 
 interface Props {
   onEdit: (id: string) => void;
 }
 
+type StatsMap = Record<string, JobStats | undefined>;
+
 export default function JobsPage({ onEdit }: Props) {
   const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [statsById, setStatsById] = useState<StatsMap>({});
   const [query, setQuery] = useState("");
   const [filterEnabled, setFilterEnabled] = useState<"all" | "enabled" | "disabled">("all");
   const [confirmDelete, setConfirmDelete] = useState<Job | null>(null);
@@ -27,6 +31,25 @@ export default function JobsPage({ onEdit }: Props) {
     const i = setInterval(refresh, 3000);
     return () => clearInterval(i);
   }, []);
+
+  // Per-row stats: loaded in parallel after the job list arrives.
+  // The endpoints are cheap (server-side aggregation over JSON storage) and
+  // R7 (N+1) is bounded by the number of jobs the user has on this page.
+  useEffect(() => {
+    if (!jobs) return;
+    let cancelled = false;
+    Promise.all(jobs.map((j) => api.stats.job(j.id, 20).then(
+      (s) => [j.id, s] as const,
+    ).catch(() => [j.id, undefined] as const))).then((entries) => {
+      if (cancelled) return;
+      const next: StatsMap = {};
+      for (const [id, s] of entries) next[id] = s;
+      setStatsById(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs]);
 
   const filtered = jobs?.filter((j) => {
     if (filterEnabled === "enabled" && !j.enabled) return false;
@@ -103,75 +126,109 @@ export default function JobsPage({ onEdit }: Props) {
                   <th>Cron</th>
                   <th>TZ</th>
                   <th>Next</th>
-                  <th>Last</th>
+                  <th>24h</th>
+                  <th>p95</th>
+                  <th>Runs</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {(filtered ?? []).map((j) => (
-                  <tr key={j.id} className="hover">
-                    <td>
-                      <input
-                        type="checkbox"
-                        className="toggle toggle-primary toggle-sm"
-                        checked={j.enabled}
-                        onChange={async () => {
-                          await api.jobs.toggle(j.id);
-                          refresh();
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <div className="font-medium">{j.name}</div>
-                      {j.description ? (
-                        <div className="text-xs text-base-content/50">{j.description}</div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <code className="text-xs px-1.5 py-0.5 rounded bg-base-300/60 font-mono">
-                        {j.cronExpression}
-                      </code>
-                    </td>
-                    <td className="text-xs text-base-content/60">{j.timezone}</td>
-                    <td className="text-xs text-base-content/60">
-                      {j.nextRunAt ? new Date(j.nextRunAt).toLocaleString() : "—"}
-                    </td>
-                    <td className="text-xs text-base-content/60">
-                      {j.lastRunAt ? new Date(j.lastRunAt).toLocaleString() : "—"}
-                    </td>
-                    <td className="text-right">
-                      <div className="join">
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs join-item"
-                          onClick={() => onEdit(j.id)}
-                          title="Edit"
-                        >
-                          <Pencil1Icon />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs join-item"
-                          onClick={async () => {
-                            await api.jobs.run(j.id);
+                {(filtered ?? []).map((j) => {
+                  const s = statsById[j.id];
+                  return (
+                    <tr key={j.id} className="hover">
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-primary toggle-sm"
+                          checked={j.enabled}
+                          onChange={async () => {
+                            await api.jobs.toggle(j.id);
                             refresh();
                           }}
-                          title="Run now"
-                        >
-                          <PlayIcon />
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs join-item text-error"
-                          onClick={() => setConfirmDelete(j)}
-                          title="Delete"
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                        />
+                      </td>
+                      <td>
+                        <div className="font-medium">{j.name}</div>
+                        {j.description ? (
+                          <div className="text-xs text-base-content/50">{j.description}</div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <code className="text-xs px-1.5 py-0.5 rounded bg-base-300/60 font-mono">
+                          {j.cronExpression}
+                        </code>
+                      </td>
+                      <td className="text-xs text-base-content/60">{j.timezone}</td>
+                      <td className="text-xs text-base-content/60">
+                        {j.nextRunAt ? new Date(j.nextRunAt).toLocaleString() : "—"}
+                      </td>
+                      <td className="text-xs">
+                        {s ? (
+                          s.successRate == null ? (
+                            <span className="italic text-base-content/40" title="No runs in last 24h">—</span>
+                          ) : (
+                            <span
+                              className={
+                                s.successRate >= 95 ? "text-success" :
+                                s.successRate >= 80 ? "text-warning" : "text-error"
+                              }
+                            >
+                              {s.successRate}%
+                            </span>
+                          )
+                        ) : (
+                          <span className="loading loading-spinner loading-xs" />
+                        )}
+                      </td>
+                      <td className="text-xs">
+                        {s ? (
+                          s.p95 == null ? (
+                            <span className="italic text-base-content/40">—</span>
+                          ) : (
+                            <span className="font-mono">{s.p95}ms p95</span>
+                          )
+                        ) : (
+                          <span className="loading loading-spinner loading-xs" />
+                        )}
+                      </td>
+                      <td>
+                        <StatusStrip runs={(s?.last20 ?? []) as Run[]} cellSize={10} count={20} />
+                      </td>
+                      <td className="text-right">
+                        <div className="join">
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs join-item"
+                            onClick={() => onEdit(j.id)}
+                            title="Edit"
+                          >
+                            <Pencil1Icon />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs join-item"
+                            onClick={async () => {
+                              await api.jobs.run(j.id);
+                              refresh();
+                            }}
+                            title="Run now"
+                          >
+                            <PlayIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs join-item text-error"
+                            onClick={() => setConfirmDelete(j)}
+                            title="Delete"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

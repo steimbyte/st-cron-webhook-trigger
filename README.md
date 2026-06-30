@@ -2,7 +2,7 @@
 
 A **local-first cron scheduler** with a **Gruvbox-themed web UI** for triggering webhooks, scripts, and shell commands on a schedule. Built as a single small Node.js process — no cloud account, no telemetry, your jobs and run history live in `~/.config/cronboard/`.
 
-> **Status:** v0.2.0 — DaisyUI Gruvbox redesign, cron import-from-curl, real calendar/clock pickers, full SDD governance.
+> **Status:** v0.4.0 — correct chart statistics (empty-state handling, p50/p95/p99, per-job status strip).
 
 ---
 

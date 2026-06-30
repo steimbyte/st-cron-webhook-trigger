@@ -74,3 +74,30 @@ export interface Run {
   error?: string;
   actionRuns: ActionRun[];
 }
+
+// Mirrored shapes of /api/stats and /api/jobs/:id/stats (v0.4.0).
+// Keep in sync with packages/core/src/server.ts.
+export interface OverallStats {
+  activeJobs: number;
+  totalJobs: number;
+  runs24h: number;
+  failures24h: number;
+  /** 0..100, or null when runs24h === 0 (empty-state; never a lie). */
+  successRate24h: number | null;
+  durationP50: number | null;
+  durationP95: number | null;
+  durationP99: number | null;
+  /** length 24, index 0 = 23 hours ago, index 23 = current hour. */
+  runsByHour: number[];
+}
+
+export interface JobStats {
+  jobId: string;
+  /** 0..100, or null when there are no runs in the last 24h. */
+  successRate: number | null;
+  p50: number | null;
+  p95: number | null;
+  p99: number | null;
+  /** most-recent `limit` runs, newest first. */
+  last20: Run[];
+}

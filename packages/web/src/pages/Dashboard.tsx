@@ -7,30 +7,21 @@ import {
   ClockIcon,
   CrossCircledIcon,
   LightningBoltIcon,
-  PlayIcon as PlayIcon,
 } from "@radix-ui/react-icons";
 import { api } from "../lib/api";
-import type { Job, Run } from "../types";
+import type { Job, OverallStats, Run } from "../types";
+import { TimeseriesChart } from "../components/TimeseriesChart";
 
 interface Props {
   onNavigate: (v: any) => void;
 }
 
-function MiniSparkline({ values, color = "var(--color-primary)" }: { values: number[]; color?: string }) {
-  if (values.length < 2) return null;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const range = max - min || 1;
-  const w = 80, h = 24;
-  const step = w / (values.length - 1);
-  const points = values
-    .map((v, i) => `${i * step},${h - ((v - min) / range) * h}`)
-    .join(" ");
-  return (
-    <svg width={w} height={h} className="opacity-80">
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
-    </svg>
-  );
+function browserTz(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "Etc/UTC";
+  } catch {
+    return "Etc/UTC";
+  }
 }
 
 function StatCard({
@@ -40,13 +31,18 @@ function StatCard({
   deltaTone = "up",
   sparkline,
   icon,
+  valueIsNull,
+  nullHint,
 }: {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   delta?: string;
   deltaTone?: "up" | "down";
-  sparkline?: number[];
+  sparkline?: React.ReactNode;
   icon?: React.ReactNode;
+  /** When true, the value should render as an em-dash with a tooltip. */
+  valueIsNull?: boolean;
+  nullHint?: string;
 }) {
   return (
     <div className="card bg-base-200/60 border border-base-300/60 shadow-sm">
@@ -56,7 +52,14 @@ function StatCard({
             <div className="text-xs uppercase tracking-wide text-base-content/50 font-medium">
               {label}
             </div>
-            <div className="text-2xl font-bold mt-1.5 text-base-content">{value}</div>
+            <div
+              className={`text-2xl font-bold mt-1.5 text-base-content ${
+                valueIsNull ? "italic text-base-content/40" : ""
+              }`}
+              title={valueIsNull ? nullHint : undefined}
+            >
+              {valueIsNull ? "—" : value}
+            </div>
           </div>
           {icon ? (
             <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
@@ -73,7 +76,7 @@ function StatCard({
           ) : (
             <span />
           )}
-          {sparkline ? <MiniSparkline values={sparkline} color={deltaTone === "down" ? "var(--color-error)" : "var(--color-success)"} /> : null}
+          {sparkline ? <div className="opacity-90">{sparkline}</div> : null}
         </div>
       </div>
     </div>
@@ -82,41 +85,41 @@ function StatCard({
 
 export default function Dashboard({ onNavigate }: Props) {
   const [jobs, setJobs] = useState<Job[] | null>(null);
-  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [stats, setStats] = useState<OverallStats | null>(null);
+  const [recentRuns, setRecentRuns] = useState<Run[] | null>(null);
 
   useEffect(() => {
-    Promise.all([api.jobs.list(), api.runs.list({ limit: 50 })]).then(([j, r]) => {
-      setJobs(j);
-      setRuns(r);
-    });
+    const tz = browserTz();
+    let cancelled = false;
+    const load = () => {
+      Promise.all([
+        api.jobs.list(),
+        api.stats.overall(tz),
+        api.runs.list({ limit: 8 }),
+      ]).then(([j, s, r]) => {
+        if (cancelled) return;
+        setJobs(j);
+        setStats(s);
+        setRecentRuns(r);
+      });
+    };
+    load();
+    const i = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(i);
+    };
   }, []);
-
-  const active = jobs?.filter((j) => j.enabled).length ?? 0;
-  const total = jobs?.length ?? 0;
-  const last24h = runs?.filter((r) => Date.now() - new Date(r.startedAt).getTime() < 86400000).length ?? 0;
-  const failed24h = runs?.filter(
-    (r) => (r.status === "failed" || r.status === "partial") && Date.now() - new Date(r.startedAt).getTime() < 86400000,
-  ).length ?? 0;
-  const successRate =
-    last24h > 0 ? Math.round((100 * (last24h - failed24h)) / last24h) : 100;
-
-  // Build a per-hour success/failure histogram for the last 24h
-  const histogram = Array.from({ length: 24 }, (_, h) => {
-    const cutoff = Date.now() - (23 - h) * 3600000;
-    const inHour = (runs ?? []).filter((r) => {
-      const t = new Date(r.startedAt).getTime();
-      return t >= cutoff && t < cutoff + 3600000;
-    });
-    return inHour.length;
-  });
 
   const upcoming = (jobs ?? [])
     .filter((j) => j.enabled && j.nextRunAt)
     .sort((a, b) => (a.nextRunAt! < b.nextRunAt! ? -1 : 1))
     .slice(0, 5);
 
-  const recentRuns = (runs ?? []).slice(0, 8);
-  const recentFailures = (runs ?? []).filter((r) => r.status === "failed").slice(0, 5);
+  const recentFailures = (recentRuns ?? []).filter((r) => r.status === "failed").slice(0, 5);
+
+  const successRateNull = stats !== null && stats.successRate24h === null;
+  const p95Null = stats !== null && stats.durationP95 === null;
 
   return (
     <div className="space-y-5">
@@ -139,34 +142,43 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* KPI row — 5 cards including the new P95 LATENCY */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <StatCard
           label="Active jobs"
-          value={jobs === null ? "…" : active}
-          delta={jobs === null ? undefined : `${total} total`}
+          value={jobs === null ? "…" : (jobs.filter((j) => j.enabled).length)}
+          delta={jobs === null ? undefined : `${jobs.length} total`}
           icon={<LightningBoltIcon />}
         />
         <StatCard
           label="Runs (24h)"
-          value={runs === null ? "…" : last24h}
-          delta={last24h > 0 ? `+${last24h} today` : "—"}
-          sparkline={histogram}
+          value={stats === null ? "…" : stats.runs24h}
+          delta={stats && stats.runs24h > 0 ? `+${stats.runs24h} today` : "—"}
+          sparkline={stats ? <TimeseriesChart values={stats.runsByHour} width={120} height={32} /> : undefined}
           icon={<ClockIcon />}
         />
         <StatCard
           label="Failures (24h)"
-          value={runs === null ? "…" : failed24h}
-          delta={failed24h > 0 ? "needs attention" : "all green"}
-          deltaTone={failed24h > 0 ? "down" : "up"}
+          value={stats === null ? "…" : stats.failures24h}
+          delta={stats && stats.failures24h > 0 ? "needs attention" : "all green"}
+          deltaTone={stats && stats.failures24h > 0 ? "down" : "up"}
           icon={<CrossCircledIcon />}
         />
         <StatCard
-          label="Success rate"
-          value={`${successRate}%`}
-          delta={successRate === 100 ? "perfect" : "stable"}
-          sparkline={histogram}
+          label="Success rate (24h)"
+          value={stats === null ? "…" : `${stats.successRate24h}%`}
+          delta={stats && stats.successRate24h === 100 ? "perfect" : "live"}
+          valueIsNull={successRateNull}
+          nullHint="No runs in the last 24h"
           icon={<CheckCircledIcon />}
+        />
+        <StatCard
+          label="P95 latency (24h)"
+          value={stats === null ? "…" : `${stats.durationP95} ms`}
+          delta={stats && stats.durationP95 != null ? "live" : "—"}
+          valueIsNull={p95Null}
+          nullHint="No completed runs in the last 24h"
+          icon={<ClockIcon />}
         />
       </div>
 
@@ -224,7 +236,7 @@ export default function Dashboard({ onNavigate }: Props) {
                   View all
                 </button>
               </div>
-              {recentRuns.length === 0 ? (
+              {recentRuns === null || recentRuns.length === 0 ? (
                 <p className="text-base-content/50 text-sm py-6 text-center">No runs yet.</p>
               ) : (
                 <div className="overflow-x-auto -mx-2">
