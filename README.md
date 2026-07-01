@@ -2,7 +2,7 @@
 
 A **local-first cron scheduler** with a **Gruvbox-themed web UI** for triggering webhooks, scripts, and shell commands on a schedule. Built as a single small Node.js process — no cloud account, no telemetry, your jobs and run history live in `~/.config/cronboard/`.
 
-> **Status:** v0.6.0 — edit shows full job config, "Copy as curl" button, percentiles, security hardening, Glass-themed DaisyUI.
+> **Status:** v0.7.0 — edit screen shows action summaries, status badges, and reorder buttons.
 
 ---
 
@@ -311,6 +311,7 @@ This codebase was **written predominantly by an AI coding assistant** (Pi, power
 - **Honest statistics (v0.4.0)** — p50/p95/p99 percentile helper, successRate returning `null` on no data, per-job status strip, real time-series.
 - **Security hardening (v0.5.0)** — SSRF guard, timing-safe auth, secrets redaction, execArgv sanitization, fastify 5.9 CVE patch, bearer-token redaction policy.
 - **Edit full config (v0.6.0)** — unredacted `GET /api/jobs/:id` for the editor, new `GET /api/jobs/:id/curl` endpoint, "Copy as curl" button in the UI.
+- **Glance-able action cards (v0.7.0)** — each `ActionCard` now shows a one-line summary (`POST https://…` or `$ cmd (cwd, timeout)`), a tinted type icon (Globe for webhook, Code for shell), a status badge (✓ ok / ✗ failed / ⋯ running / — never run) sourced from `/api/runs`, up/down reorder buttons (debounced 250 ms PATCH, dense renumbering 0..n-1), and collapsible `<details>` form fields (expanded for new jobs, collapsed for existing ones). Empty state shows two large `Add Webhook` / `Add Shell` CTA cards.
 
 The project owner reviewed, approved, and shipped every change. **All code is provided as-is**, with no warranty. Use at your own risk, especially for production cron jobs — always test schedules manually before relying on them for critical workloads.
 

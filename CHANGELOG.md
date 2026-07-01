@@ -6,7 +6,34 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Planned
 - v0.6.1: per-job rate limiting + audit log; `--cors-origins <csv>` for reverse-proxy setups; DNS-rebinding mitigation via `dns.setServers` + IP pinning; per-Job logger in `ActionExecutor`.
-- v0.7.0: at-rest encryption for `jobs.json` (key in OS keychain / DPAPI / libsecret); MFA / RBAC for shared-trust-zone deployments.
+
+---
+
+## [0.7.0] — 2026-07-01
+
+### Added
+- **JobEditor: action summaries** — every `ActionCard` now shows a one-line header. Webhook: `POST  https://…` (two-space separator; URL truncated to 47 + `…` past 50 chars per D13). Shell: `$ cmd  (cwd: <cwd>, timeout <Xs>)` — first command line only, with `(cwd, timeout)` only when at least one of the two fields is set.
+- **JobEditor: tinted type icons** — `Globe` icon on `bg-primary/15` for webhooks, `Code` icon on `bg-secondary/15` for shells, replacing the old text badge (`webhook #N` / `shell #N`).
+- **JobEditor: per-action status badge** — ✓ / ✗ / ⋯ / — pill driven by `GET /api/runs?jobId=…&limit=50` (no new endpoint, no polling). Tone buckets: `success` → ✓ ok, `error` → ✗ failed / partial / timeout, `info` → ⋯ running, `neutral` → — never run.
+- **JobEditor: up/down reorder buttons** — `ChevronUp` / `ChevronDown` on every card; first row disables Up, last row disables Down. Reorder fires a debounced `PATCH /api/jobs/:id` (250 ms) with dense renumbered positions `0..n-1` (D1). Drag-handle glyph (`≡`) sits next to the arrows as a visual hint only — no drag-and-drop yet (that's v0.8+).
+- **JobEditor: collapsible form** — method/URL/body/headers (webhook) or command/cwd/timeout (shell) now live inside a browser-native `<details>` element. Collapsed by default for existing jobs, expanded for new jobs.
+- **JobEditor: empty-state CTA cards** — when `actions.length === 0`, two large `btn-lg` cards (`grid-cols-1 md:grid-cols-2 gap-3 pt-2`) replace the old text-only empty state. One card per action type, with the same Globe/Code iconography and a one-line description.
+- **`npm run test:web`** — new script wiring `node --test --import tsx` to the four pure-helper test suites. No new test framework, no new dependency.
+
+### Internal
+- Four new pure-helper modules in `packages/web/src/lib/`:
+  - `actionSummary.ts` — `summarize(action)`, `truncateUrl(url, max=50)`.
+  - `relativeTime.ts` — `formatRelative(ms)`, `now()` (exported for testing).
+  - `runStatus.ts` — `statusForRun(run)`, returning `{ tone, label, iconName }`.
+  - `reorderActions.ts` — `moveUp(actions, idx)`, `moveDown(actions, idx)`.
+- 58 new unit tests across 4 test files (`actionSummary.test.ts`, `relativeTime.test.ts`, `runStatus.test.ts`, `reorderActions.test.ts`); all run via `npm run test:web`.
+- No data-model change, no storage migration, no backend change, no new npm dependency. The `/api/runs` endpoint (already present since v0.1.0) is reused; per-action status is derived client-side from `Run.actionRuns[]`.
+
+### Verified
+- `npm run typecheck` — exit 0.
+- `npm run test:web` — 58 / 15 suites, 0 failures.
+- `npm test` — 208 / 36 suites, 0 failures (core unchanged).
+- `npm run build` — success; JS bundle +12.34 KB raw / +3.36 KB gz, CSS +4.15 KB raw / +0.41 KB gz.
 
 ---
 
@@ -166,7 +193,8 @@ This is a **semver-major** security-hardening release. Public-API surface (CLI f
 
 ---
 
-[Unreleased]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/steimbyte/st-cron-webhook-trigger/compare/v0.3.0...v0.4.0

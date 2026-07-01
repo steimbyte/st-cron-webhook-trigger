@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  CircleBackslashIcon as CircleBackslash,
+  GlobeIcon,
+  CodeIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  DragHandleDots2Icon,
+  CheckCircledIcon,
+  CrossCircledIcon,
+  ReloadIcon,
+  MinusIcon,
   PlayIcon as Play,
   PlusIcon as Plus,
   TrashIcon as Trash,
@@ -8,7 +16,12 @@ import {
 import CronBuilder from "../components/CronBuilder";
 import { api } from "../lib/api";
 import { parseCurl } from "../lib/curlParser";
-import type { Job, JobAction, WebhookConfig, ShellConfig } from "../types";
+import { summarize } from "../lib/actionSummary";
+import { moveUp, moveDown } from "../lib/reorderActions";
+import { statusForRun } from "../lib/runStatus";
+import { formatRelative } from "../lib/relativeTime";
+import type { ActionStatus } from "../lib/runStatus";
+import type { Job, JobAction, WebhookConfig, ShellConfig, Run } from "../types";
 
 interface Props {
   jobId?: string;
@@ -20,6 +33,10 @@ const COMMON_TZ = [
   "America/New_York", "America/Los_Angeles", "America/Chicago",
   "Asia/Tokyo", "Asia/Shanghai", "Asia/Kolkata", "Australia/Sydney",
 ];
+
+// v0.7.0 — debounce window for reorder PATCH (D6). Each new click within the
+// window resets the timer; save()/testRun()/unmount cancels immediately (R3).
+const REORDER_DEBOUNCE_MS = 250;
 
 export default function JobEditor({ jobId, onDone }: Props) {
   const isNew = !jobId;
@@ -35,13 +52,61 @@ export default function JobEditor({ jobId, onDone }: Props) {
   const [enabled, setEnabled] = useState(true);
   const [actions, setActions] = useState<JobAction[]>([]);
 
+  // v0.7.0 — latest-action map for the status badges (D2). We hold the most
+  // recent Run per actionId; Run.status drives the badge tone. Per-action
+  // accuracy is partial (a Run with one failed action shows "failed" on
+  // every action in the run); per D5 the partial bucket collapses into
+  // error, so this is acceptable.
+  const [runsByActionId, setRunsByActionId] = useState<Map<string, Run>>(new Map());
+
+  // v0.7.0 — debounce machinery for reorder PATCH (D6 / R3 / R4).
+  //   - `actionsRef` keeps a live pointer to the current `actions` so the
+  //     timer closure never sees a stale snapshot when the user clicks
+  //     multiple times within the debounce window.
+  //   - `pendingReorderRef` holds the debounced timer + dirty flag.
+  const actionsRef = useRef<JobAction[]>([]);
+  const pendingReorderRef = useRef<{ timer: number | null; dirty: boolean }>({
+    timer: null,
+    dirty: false,
+  });
+
+  // Keep actionsRef synchronised with the latest state.
   useEffect(() => {
-    if (jobId) {
-      api.jobs.get(jobId).then((j) => {
+    actionsRef.current = actions;
+  }, [actions]);
+
+  // Cleanup-on-unmount: cancel any in-flight reorder timer (R3).
+  useEffect(() => () => cancelPendingReorder(), []);
+
+  useEffect(() => {
+    if (!jobId) return;
+    api.jobs
+      .get(jobId)
+      .then((j) => {
         hydrate(j);
         setLoading(false);
-      }).catch((e) => setError(e.message));
-    }
+      })
+      .catch((e) => setError(e.message));
+
+    // v0.7.0 — one-shot runs fetch for the status badges (R2).
+    api.runs
+      .list({ jobId, limit: 50 })
+      .then((runs) => {
+        const m = new Map<string, Run>();
+        // Most-recent first: iterate the array as returned by the API
+        // (already sorted by startedAt desc) and only keep the FIRST
+        // occurrence per actionId.
+        for (const run of runs) {
+          for (const ar of run.actionRuns ?? []) {
+            if (!m.has(ar.actionId)) m.set(ar.actionId, run);
+          }
+        }
+        setRunsByActionId(m);
+      })
+      .catch(() => {
+        // Silent: every action's badge will fall back to "never run"
+        // (acceptable per design §6.3).
+      });
   }, [jobId]);
 
   function hydrate(j: Job) {
@@ -53,7 +118,40 @@ export default function JobEditor({ jobId, onDone }: Props) {
     setActions(j.actions);
   }
 
+  function cancelPendingReorder() {
+    if (pendingReorderRef.current.timer != null) {
+      clearTimeout(pendingReorderRef.current.timer);
+      pendingReorderRef.current = { timer: null, dirty: false };
+    }
+  }
+
+  function moveAction(idx: number, direction: "up" | "down") {
+    setActions((prev) =>
+      direction === "up" ? moveUp(prev, idx) : moveDown(prev, idx),
+    );
+    scheduleReorderSave();
+  }
+
+  function scheduleReorderSave() {
+    pendingReorderRef.current.dirty = true;
+    if (pendingReorderRef.current.timer != null) {
+      clearTimeout(pendingReorderRef.current.timer);
+    }
+    pendingReorderRef.current.timer = window.setTimeout(async () => {
+      pendingReorderRef.current.timer = null;
+      if (!pendingReorderRef.current.dirty || !jobId) return;
+      pendingReorderRef.current.dirty = false;
+      try {
+        // Read from the ref so we never serialise a stale snapshot.
+        await api.jobs.update(jobId, { actions: actionsRef.current });
+      } catch (err: any) {
+        setError(err.message);
+      }
+    }, REORDER_DEBOUNCE_MS);
+  }
+
   async function save() {
+    cancelPendingReorder(); // R3 — single PATCH, never in parallel with reorder.
     setSaving(true);
     setError(null);
     try {
@@ -79,6 +177,7 @@ export default function JobEditor({ jobId, onDone }: Props) {
   }
 
   async function testRun() {
+    cancelPendingReorder(); // R9 — single PATCH, never in parallel with reorder.
     setTestRunning(true);
     setError(null);
     try {
@@ -124,7 +223,9 @@ export default function JobEditor({ jobId, onDone }: Props) {
   }
 
   function removeAction(idx: number) {
-    setActions(actions.filter((_, i) => i !== idx).map((a, i) => ({ ...a, position: i })));
+    // Dense renumbering on delete mirrors the reorder helpers (D1).
+    setActions(actions.filter((_, i) => i !== idx).map((a, i) => ({ ...a, position: i } as JobAction)));
+    scheduleReorderSave();
   }
 
   function updateAction(idx: number, patch: Partial<JobAction>) {
@@ -251,9 +352,36 @@ export default function JobEditor({ jobId, onDone }: Props) {
           </div>
 
           {actions.length === 0 ? (
-            <div className="text-center py-8 text-base-content/50">
-              <CircleBackslash className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No actions yet. Add a webhook or shell command above.</p>
+            // T4 — empty state CTA cards (S6).
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2" data-testid="empty-state">
+              <button
+                type="button"
+                className="btn btn-lg h-auto py-6 flex-col gap-2 bg-base-100/60 border border-base-300/40 hover:bg-base-100/80"
+                data-testid="add-webhook-cta"
+                onClick={addWebhook}
+              >
+                <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-primary/15 text-primary">
+                  <GlobeIcon className="w-7 h-7" aria-hidden="true" />
+                </span>
+                <span className="font-semibold">Add a Webhook</span>
+                <span className="text-xs text-base-content/60 font-normal">
+                  POST to a URL on the schedule
+                </span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-lg h-auto py-6 flex-col gap-2 bg-base-100/60 border border-base-300/40 hover:bg-base-100/80"
+                data-testid="add-shell-cta"
+                onClick={addShell}
+              >
+                <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-secondary/15 text-secondary">
+                  <CodeIcon className="w-7 h-7" aria-hidden="true" />
+                </span>
+                <span className="font-semibold">Add a Shell Command</span>
+                <span className="text-xs text-base-content/60 font-normal">
+                  Run a local command
+                </span>
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -263,10 +391,15 @@ export default function JobEditor({ jobId, onDone }: Props) {
                   action={a}
                   index={i}
                   isFirst={i === 0}
+                  isLast={i === actions.length - 1}
+                  totalCount={actions.length}
                   jobId={jobId}
                   saving={saving}
+                  isNew={isNew}
+                  status={statusForRun(runsByActionId.get((a as any).id) ?? null)}
                   onChange={(patch) => updateAction(i, patch)}
                   onRemove={() => removeAction(i)}
+                  moveAction={moveAction}
                 />
               ))}
             </div>
@@ -277,65 +410,184 @@ export default function JobEditor({ jobId, onDone }: Props) {
   );
 }
 
+// ===========================================================================
+// ActionCard — v0.7.0 redesign
+// ===========================================================================
+
 function ActionCard({
   action,
   index,
   isFirst,
+  isLast,
+  totalCount,
   jobId,
   saving,
+  isNew,
+  status,
   onChange,
   onRemove,
+  moveAction,
 }: {
   action: JobAction;
   index: number;
   isFirst: boolean;
+  isLast: boolean;
+  totalCount: number;
   jobId?: string;
   saving: boolean;
+  isNew: boolean;
+  status: ActionStatus;
   onChange: (patch: Partial<JobAction>) => void;
   onRemove: () => void;
+  moveAction: (idx: number, direction: "up" | "down") => void;
 }) {
   return (
     <div className="card bg-base-100/60 border border-base-300/40">
       <div className="card-body p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <span className={`badge ${action.type === "webhook" ? "badge-primary" : "badge-secondary"}`}>
-            {action.type === "webhook" ? "webhook" : "shell"} #{index + 1}
+        {/* Header (S1 / S2 / S3 / S4) */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Type icon (Globe for webhook, Code for shell) with tint (S2) */}
+          <span
+            data-testid="action-icon"
+            data-action-icon={action.type}
+            className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 ${
+              action.type === "webhook" ? "bg-primary/15 text-primary" : "bg-secondary/15 text-secondary"
+            }`}
+            aria-hidden="true"
+          >
+            {action.type === "webhook" ? <GlobeIcon /> : <CodeIcon />}
           </span>
-          <label className="label cursor-pointer gap-2 py-0">
-            <span className="label-text text-xs text-base-content/60">continue on error</span>
+
+          {/* Summary (S1) */}
+          <span data-testid="action-summary" className="font-mono text-sm truncate flex-1 min-w-[180px]">
+            {summarize(action)}
+          </span>
+
+          {/* Status badge (S4) */}
+          <ActionStatusBadge status={status} />
+
+          {/* Drag handle (visual hint only, no DnD) */}
+          <span title="Use the arrows to reorder" className="text-base-content/30 hidden sm:inline">
+            <DragHandleDots2Icon aria-hidden="true" />
+          </span>
+
+          {/* Reorder buttons (S3) */}
+          <div className="join">
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost join-item"
+              data-testid="reorder-up"
+              aria-label={`Move action ${index + 1} up`}
+              disabled={isFirst}
+              onClick={() => moveAction(index, "up")}
+            >
+              <ChevronUpIcon />
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost join-item"
+              data-testid="reorder-down"
+              aria-label={`Move action ${index + 1} down`}
+              disabled={isLast}
+              onClick={() => moveAction(index, "down")}
+            >
+              <ChevronDownIcon />
+            </button>
+          </div>
+
+          {/* Continue on error */}
+          <label
+            className="label cursor-pointer gap-1 py-0"
+            title="Continue if this action fails"
+          >
             <input
               type="checkbox"
-              className="toggle toggle-sm"
+              className="toggle toggle-xs"
               checked={action.continueOnError}
               onChange={(e) => onChange({ continueOnError: e.target.checked })}
             />
           </label>
+
+          {/* Delete */}
           <button
             type="button"
-            className="btn btn-ghost btn-xs btn-square ml-auto text-error"
+            className="btn btn-ghost btn-xs btn-square text-error ml-auto"
+            aria-label={`Remove action ${index + 1}`}
             onClick={onRemove}
           >
             <Trash />
           </button>
         </div>
-        {action.type === "webhook" ? (
-          <WebhookFields
-            config={action.config as WebhookConfig}
-            onChange={(cfg) => onChange({ config: cfg } as any)}
-            jobId={jobId}
-            isFirstAction={isFirst}
-            saving={saving}
-          />
-        ) : (
-          <ShellFields
-            config={action.config as ShellConfig}
-            onChange={(cfg) => onChange({ config: cfg } as any)}
-          />
-        )}
+
+        {/* Collapsible form (S5 / D8 / D9) */}
+        <details
+          data-testid="action-form"
+          // uncontrolled (D9): native browser state is source of truth.
+          // We seed the initial state from `isNew`; React won't fight the
+          // user after mount because isNew is static per job-load.
+          open={isNew}
+          className="rounded-md border border-base-300/30 bg-base-100/40"
+        >
+          <summary className="cursor-pointer select-none px-3 py-1.5 text-xs uppercase text-base-content/60 hover:text-base-content/90">
+            Edit fields
+          </summary>
+          <div className="px-3 pb-3 pt-1">
+            {action.type === "webhook" ? (
+              <WebhookFields
+                config={action.config as WebhookConfig}
+                onChange={(cfg) => onChange({ config: cfg } as any)}
+                jobId={jobId}
+                isFirstAction={isFirst}
+                saving={saving}
+              />
+            ) : (
+              <ShellFields
+                config={action.config as ShellConfig}
+                onChange={(cfg) => onChange({ config: cfg } as any)}
+              />
+            )}
+          </div>
+        </details>
       </div>
     </div>
   );
 }
+
+// ===========================================================================
+// ActionStatusBadge — v0.7.0 (S4)
+// ===========================================================================
+
+function ActionStatusBadge({ status }: { status: ActionStatus }) {
+  const colorClass = {
+    success: "text-success bg-success/10",
+    error: "text-error bg-error/10",
+    info: "text-info bg-info/10",
+    neutral: "text-base-content/40 bg-base-content/5",
+  }[status.tone];
+
+  const Icon = {
+    check: CheckCircledIcon,
+    cross: CrossCircledIcon,
+    reload: ReloadIcon,
+    minus: MinusIcon,
+  }[status.iconName];
+
+  return (
+    <span
+      data-testid="status-badge"
+      data-status={status.tone}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}
+      title={status.label}
+    >
+      <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+      <span>{status.label}</span>
+    </span>
+  );
+}
+
+// ===========================================================================
+// (Existing v0.6.0 form sub-components — unchanged)
+// ===========================================================================
 
 /* ─── WebhookFields ───────────────────────────────────────────────────── */
 
@@ -403,10 +655,10 @@ function WebhookFields({
 
   function loadExample() {
     setCurlInput(`curl -X POST \\
-  "https://<your-langflow-host.example>/api/v1/webhook/<your-webhook-id>" \\
-  -H 'Content-Type: application/json' \\
-  -H 'x-api-key: <your api key>' \\
-  -d '{"any": "data"}'`);
+      "https://<your-langflow-host.example>/api/v1/webhook/<your-webhook-id>" \\
+      -H 'Content-Type: application/json' \\
+      -H 'x-api-key: <your api key>' \\
+      -d '{"any": "data"}'`);
   }
 
   return (
@@ -543,8 +795,8 @@ function WebhookFields({
             value={curlInput}
             onChange={(e) => { setCurlInput(e.target.value); setImportError(null); }}
             placeholder={`curl -X POST "https://example.com/webhook" \\
-  -H 'Content-Type: application/json' \\
-  -d '{"event":"heartbeat"}'`}
+      -H 'Content-Type: application/json' \\
+      -d '{"event":"heartbeat"}'`}
           />
           {importError ? (
             <div role="alert" className="alert alert-error mt-3">
@@ -611,3 +863,7 @@ function ShellFields({ config, onChange }: { config: ShellConfig; onChange: (cfg
     </div>
   );
 }
+
+// Re-exported for typecheck; the formatRelative helper is used by callers
+// that may import it from this module (kept for forward-compat).
+export { formatRelative };

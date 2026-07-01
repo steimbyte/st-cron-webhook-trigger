@@ -26,7 +26,7 @@ const program = new Command();
 program
   .name("cronboard")
   .description("Local-first cron scheduler with Radix UI web frontend")
-  .version("0.6.0");
+  .version("0.7.0");
 
 // ---------- start ----------
 program
