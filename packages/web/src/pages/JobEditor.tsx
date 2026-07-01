@@ -262,6 +262,9 @@ export default function JobEditor({ jobId, onDone }: Props) {
                   key={(a as any).id ?? i}
                   action={a}
                   index={i}
+                  isFirst={i === 0}
+                  jobId={jobId}
+                  saving={saving}
                   onChange={(patch) => updateAction(i, patch)}
                   onRemove={() => removeAction(i)}
                 />
@@ -277,11 +280,17 @@ export default function JobEditor({ jobId, onDone }: Props) {
 function ActionCard({
   action,
   index,
+  isFirst,
+  jobId,
+  saving,
   onChange,
   onRemove,
 }: {
   action: JobAction;
   index: number;
+  isFirst: boolean;
+  jobId?: string;
+  saving: boolean;
   onChange: (patch: Partial<JobAction>) => void;
   onRemove: () => void;
 }) {
@@ -313,6 +322,9 @@ function ActionCard({
           <WebhookFields
             config={action.config as WebhookConfig}
             onChange={(cfg) => onChange({ config: cfg } as any)}
+            jobId={jobId}
+            isFirstAction={isFirst}
+            saving={saving}
           />
         ) : (
           <ShellFields
@@ -330,14 +342,46 @@ function ActionCard({
 function WebhookFields({
   config,
   onChange,
+  jobId,
+  isFirstAction,
+  saving,
 }: {
   config: WebhookConfig;
   onChange: (cfg: WebhookConfig) => void;
+  // v0.6.0 — props for the "Copy as curl" button. Hidden when no jobId
+  // (new job not yet saved) or when this card is not the first action
+  // (only the first webhook action of a saved job has a curl export).
+  jobId?: string;
+  isFirstAction: boolean;
+  saving: boolean;
 }) {
   const [header, setHeader] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [curlInput, setCurlInput] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  const [copyOk, setCopyOk] = useState(false);
+  const [copyErr, setCopyErr] = useState<string | null>(null);
+
+  // v0.6.0 — fetch the saved curl/shell from the server and put it on the
+  // clipboard. Honours R3 (no button when there's nothing to copy) and R7
+  // (try/catch around navigator.clipboard.writeText).
+  async function copyAsCurl() {
+    if (!jobId) return;
+    setCopyErr(null);
+    try {
+      const r = await api.jobs.curl(jobId);
+      const text = r.curl ?? r.shell ?? "";
+      if (!text) {
+        setCopyErr("Server returned an empty export.");
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setCopyOk(true);
+      setTimeout(() => setCopyOk(false), 1500);
+    } catch (err: any) {
+      setCopyErr(`Clipboard blocked: ${err.message ?? err}`);
+    }
+  }
 
   function applyCurl() {
     const parsed = parseCurl(curlInput);
@@ -390,6 +434,20 @@ function WebhookFields({
           >
             + Import from curl
           </button>
+          {jobId && isFirstAction ? (
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={copyAsCurl}
+              disabled={saving}
+              title="Copy a curl that reproduces this webhook"
+            >
+              {copyOk ? "Copied ✓" : "Copy as curl"}
+            </button>
+          ) : null}
+          {copyErr ? (
+            <span className="text-xs text-error ml-2">{copyErr}</span>
+          ) : null}
         </div>
         <input
           type="text"

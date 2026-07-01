@@ -11,8 +11,9 @@ import type { RunsRepo } from "./store/runs.js";
 import { createJobSchema, updateJobSchema } from "./schemas.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { redactWebhookAction, redactShellAction } from "./security/secrets.js";
+import { toCurl } from "./security/curl.js";
 import { isPrivateAddress } from "./security/ssrf.js";
-import type { JobAction } from "./types.js";
+import type { JobAction, WebhookConfig, ShellConfig } from "./types.js";
 import cronstrue from "cronstrue";
 const cronstrueDescribe = (cronstrue as unknown as { toString: (e: string, o?: { locale?: string; tz?: string }) => string }).toString;
 import { Cron } from "croner";
@@ -117,7 +118,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
 
   app.get("/api/health", async () => ({
     status: "ok",
-    version: "0.5.0",
+    version: "0.6.0",
     time: new Date().toISOString(),
   }));
 
@@ -131,7 +132,32 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
     const { id } = req.params as { id: string };
     const job = await deps.jobs.get(id);
     if (!job) return reply.code(404).send({ error: "not found" });
-    return stripJobSecrets(job);
+    // v0.6.0 — single-item exception: unredacted. List endpoint keeps
+    // stripJobSecrets() (v0.5.0 M2): bulk-view / publishing channel.
+    // Threat-model details: proposal.md §2, design.md §4.
+    return job;
+  });
+
+  // v0.6.0 — paste-ready export of the first action. webhook -> { curl },
+  // shell -> { shell } (literal, no echo-wrap per D3).
+  app.get("/api/jobs/:id/curl", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const job = await deps.jobs.get(id);
+    if (!job || !Array.isArray(job.actions) || job.actions.length === 0) {
+      return reply.code(404).send({ error: "not found" });
+    }
+    const a = job.actions[0];
+    try {
+      if (a.type === "webhook") {
+        return { curl: toCurl(a.config as WebhookConfig) };
+      }
+      if (a.type === "shell") {
+        return { shell: (a.config as ShellConfig).command };
+      }
+      return reply.code(422).send({ error: "first action has no exportable form" });
+    } catch (err: any) {
+      return reply.code(400).send({ error: `toCurl: ${err.message ?? String(err)}` });
+    }
   });
 
   app.post("/api/jobs", async (req, reply) => {

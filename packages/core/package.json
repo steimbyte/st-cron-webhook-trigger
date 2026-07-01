@@ -1,6 +1,6 @@
 {
   "name": "@cronboard/core",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Cronboard backend: CLI, scheduler, HTTP server, JSON storage, actions",
   "private": true,
   "type": "module",

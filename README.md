@@ -2,7 +2,7 @@
 
 A **local-first cron scheduler** with a **Gruvbox-themed web UI** for triggering webhooks, scripts, and shell commands on a schedule. Built as a single small Node.js process — no cloud account, no telemetry, your jobs and run history live in `~/.config/cronboard/`.
 
-> **Status:** v0.5.0 — security hardening (SSRF guard for webhook targets, timing-safe bearer auth, secrets redaction, fastify 5.9 CVE patch).
+> **Status:** v0.6.0 — full-visibility edit (unredacted `GET /api/jobs/:id`) + "Copy as curl" export. Built on v0.5.0 security hardening.
 
 ---
 

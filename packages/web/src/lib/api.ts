@@ -27,6 +27,13 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>("DELETE", `/api/jobs/${id}`),
     toggle: (id: string) => request<Job>("POST", `/api/jobs/${id}/toggle`),
     run: (id: string) => request<{ ok: true }>("POST", `/api/jobs/${id}/run`),
+    // v0.6.0 — paste-ready export of the first action. webhook -> curl,
+    // shell -> shell (literal). At most one of the two keys is populated.
+    curl: (id: string) =>
+      request<{ curl?: string; shell?: string }>(
+        "GET",
+        `/api/jobs/${id}/curl`,
+      ),
   },
   runs: {
     list: (params?: { jobId?: string; limit?: number }) => {
