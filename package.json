@@ -1,7 +1,7 @@
 {
   "name": "cronboard",
-  "version": "0.7.0",
-  "description": "Local-first cron scheduler with a Radix UI web frontend. Run, edit and monitor cron jobs visually — trigger webhooks, run shell commands, log runs.",
+  "version": "0.7.1",
+  "description": "Local-first cron scheduler with a Radix UI web frontend. Run, edit and monitor cron jobs visually \u2014 trigger webhooks, run shell commands, log runs.",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -22,7 +22,7 @@
     "ls": "tsx packages/core/src/cli.ts ls",
     "typecheck": "tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
     "test": "node --test --import tsx packages/core/src/**/*.test.ts",
-    "test:web": "node --test --import tsx packages/web/src/lib/actionSummary.test.ts packages/web/src/lib/relativeTime.test.ts packages/web/src/lib/runStatus.test.ts packages/web/src/lib/reorderActions.test.ts",
+    "test:web": "node --test --import tsx packages/web/src/lib/actionSummary.test.ts packages/web/src/lib/relativeTime.test.ts packages/web/src/lib/runStatus.test.ts packages/web/src/lib/reorderActions.test.ts packages/web/src/lib/cronDescription.test.ts",
     "format": "prettier --write \"packages/**/*.{ts,tsx,css,md}\""
   },
   "keywords": [

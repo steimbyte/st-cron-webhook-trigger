@@ -9,6 +9,34 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ---
 
+## [0.7.1] — 2026-07-01
+
+### Added
+- **Schedule modal: 3×2 preset cards** — the six cramped `btn-sm` preset chips are gone; the modal now shows a 3×2 grid of cards (1 col mobile / 2 sm / 3 md+). Each card has an icon (`ClockIcon` / `TimerIcon` / `CalendarIcon` / `RowsIcon` / `LayersIcon` / `CodeIcon`), a label, a one-line hint visible without hovering, and an active state (`border-primary bg-primary/10` + `aria-pressed`). The selected preset is now glance-able at a glance rather than buried in a tooltip.
+- **Native `<input type="time">`** — replaces the two `<select>` dropdowns that the modal used for hour and minute. `step={60}`, `lang="en-GB"` (24-hour locale hint), `input-lg` for a generous tap target. One control instead of two.
+- **Inline human description** — every card grid is followed by a one-line plain-English description that explains the current cron: `"Every 5 minutes"`, `"Fires at minute 30 of every 2 hours"`, `"Fires at 09:00 on weekdays"`, `"Fires at 09:00 on day 15 of every month"`, `"Custom: */5 * * * *"`. The helper (`formatDescription` in `packages/web/src/lib/cronDescription.ts`) is pure — no API call, no spinner.
+- **`select-md` interval picker** — the every-N-minutes / every-N-hours dropdown uses DaisyUI `select-md` (≈ 48 px tall) instead of `select-sm`. Comfortable on desktop and mobile.
+- **Active-weekday chip row promoted** — the "Active: Mo, Tu, We, Th, Fr" inline row above the weekly calendar now uses `badge badge-primary badge-md` and a real label ("Active weekdays:") instead of the old `badge-sm` afterthought.
+- **48 × 48 day-of-month tile** — the monthly preset now shows the active day-of-month as a large `bg-primary text-primary-content` tile (`w-12 h-12 rounded-xl font-bold text-2xl`) instead of a `badge-sm` chip. Visually dominant over the calendar below.
+- **`<details>` open-state persistence** — the per-preset detail block lives inside a browser-native `<details>` element whose `open` state is persisted per `kind` in `localStorage["cb-details-opened-${kind}"]`. First open → expanded (D10). Once the user collapses one, the collapse sticks. No PII (no cron strings stored); try/catch around all `localStorage` calls for private-mode safety.
+- **Reset button is a labeled outline button** — `<ResetIcon /> Reset` replacing the hidden `↺` icon-only button. `btn btn-outline btn-sm gap-1`. Still in the modal header, still resets the cron state without touching the localStorage UI preferences.
+- **Preview tiles redesign** — the five-tile preview block uses `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5`. Each tile is a card with the date (e.g. `"Tue, 1 Jul"`) prominent (`text-base font-semibold`) above the time (`text-sm text-base-content/60 font-mono`). Runs that fall on Sat / Sun get an optional yellow `badge-warning badge-xs` labelled `wknd` (tooltip "Weekend run"). Server-side `cronstrue` description still renders in the Preview header (unchanged).
+
+### Internal
+- New pure-helper module `packages/web/src/lib/cronDescription.ts` exporting `formatDescription(state: CronExpressionState): string`. Handles the 6 `CronKind` values plus two special-cases for `week`: `[1,2,3,4,5]` collapses to `"weekdays"`, `[0,6]` collapses to `"weekends"`, empty days falls back to `"every day"`.
+- 21 new unit tests in `packages/web/src/lib/cronDescription.test.ts` — all pass under `npm run test:web`. The `test:web` script in root `package.json` was extended to include the new suite.
+- `packages/web/src/components/CronBuilder.tsx` rewritten as a single 350-line component; no behavior change (the saved cron string is byte-identical for every input).
+- No backend change, no storage migration, no data-model change, no new npm dependency. Bundle size: +7.1 kB raw JS / +2.5 kB gz JS, +2.7 kB raw CSS / +0.5 kB gz CSS — well within the 4 kB-gzip soft budget from the proposal (S8).
+
+### Verified
+- `npm run typecheck` — exit 0.
+- `npm run test:web` — 79 / 21 suites, 0 failures.
+- `npm test` — 208 / 36 suites, 0 failures (core unchanged).
+- `npm run build` — success; bundle delta vs v0.7.0: JS +7097 raw / **+2514 gz**, CSS +2651 raw / **+518 gz**.
+- `node bin/copy-web.mjs` — copies built assets into `packages/core/dist/web`.
+
+---
+
 ## [0.7.0] — 2026-07-01
 
 ### Added
